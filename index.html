@@ -148,6 +148,7 @@ var DEF={weeks:30,orderDelay:2,shipDelay:2,prodDelay:2,hold:0.5,back:1,initInv:1
 
 /* ---------- moteur de simulation (pur) ---------- */
 function demandAt(p,t){
+  if(p.demandType==="manual"){var mm=p.manual||{};return mm[t]!=null?mm[t]:0}
   if(p.demandType==="custom"){var a=String(p.custom||"").split(/[\s,;]+/).map(Number).filter(function(x){return isFinite(x)&&x>=0});if(a.length)return a[Math.min(t,a.length)-1]}
   if(p.demandType==="spike")return (t>=p.dWeek&&t<p.dWeek+p.dLen)?p.dNew:p.dBase;
   return t>=p.dWeek?p.dNew:p.dBase;
@@ -157,6 +158,7 @@ function simulate(g,seats){
   var p=g.params,f=p.dBase,T=g.endWeek!=null?g.endWeek:p.weeks,auto=g.auto||{},W=T+1;
   ROLES.forEach(function(R){if(auto[R.k])return;var o=seatOrders(g,seats,R.k),n=0;while(o[n+1]!=null)n++;W=Math.min(W,n+1)});
   if(g.status==="lobby")W=1;
+  var need=false;if(p.demandType==="manual"){var mn=p.manual||{},nd=0;while(mn[nd+1]!=null)nd++;W=Math.min(W,nd+1);need=g.status!=="lobby"&&g.status!=="finished"&&W<=T&&mn[W]==null}
   var last=Math.min(W,T);
   var st=ROLES.map(function(R,i){var L=i<3?p.orderDelay+p.shipDelay:p.prodDelay;return{inv:p.initInv,back:0,cum:0,sm:f,onOrder:f*L,L:L,rows:[]}});
   function gOrd(j,t){if(t<1)return f;var o=st[j].rows[t-1].order;return o==null?0:o}
@@ -179,7 +181,7 @@ function simulate(g,seats){
   /* arrivées déjà connues pour les semaines suivantes */
   var incoming=ROLES.map(function(R,i){var out=[];if(W>T)return out;var max=i<3?p.shipDelay:p.prodDelay-1;
     for(var k=1;k<=max;k++)out.push(i<3?gShip(i+1,W+k-p.shipDelay):gOrd(3,W+k-p.prodDelay));return out});
-  return{W:W,T:T,st:st,incoming:incoming,finished:W>T||g.status==="finished"};
+  return{needDemand:need,W:W,T:T,st:st,incoming:incoming,finished:W>T||g.status==="finished"};
 }
 function variance(a){if(a.length<2)return 0;var m=a.reduce(function(x,y){return x+y},0)/a.length;return a.reduce(function(x,y){return x+(y-m)*(y-m)},0)/a.length}
 if(typeof module!=="undefined"){module.exports={simulate:simulate,DEF:DEF}}
@@ -235,6 +237,12 @@ function localId(){var id=null;try{id=localStorage.getItem("bg-uid")}catch(e){}i
 var CODE=(new URLSearchParams(location.search).get("s")||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);
 S.myName="";try{S.myName=localStorage.getItem("bg-name")||""}catch(e){}
 S.gateName=S.myName;S.gateCode=CODE;
+var PROLE=new URLSearchParams(location.search).get("p")||"";if(!ROLES.some(function(R){return R.k===PROLE}))PROLE="";
+S.inv={};try{S.inv=JSON.parse(localStorage.getItem("bg-inv-"+CODE)||"{}")||{}}catch(e){}
+function inviteLink(k){return location.origin+location.pathname+"?s="+CODE+"&p="+k}
+function inviteBox(R,show){if(!show||S.local||!CODE)return "";
+  return '<label class="f" for="inv-'+R.k+'">E-mail du joueur<input id="inv-'+R.k+'" data-inv="'+R.k+'" type="email" autocomplete="off" placeholder="prenom.nom@exemple.fr" value="'+esc(S.inv[R.k]||"")+'"></label>'+
+    '<div class="row"><button class="btn sm primary" data-act="invite" data-arg="'+R.k+'">Envoyer l\'invitation</button><button class="btn sm" data-act="copylink" data-arg="'+R.k+'">Copier le lien</button></div>'}
 function fbStore(fsdb){
   var gref=fsdb.collection("games").doc(CODE),col=gref.collection("seats"),q={},got=0;
   function chain(key,fn){q[key]=(q[key]||Promise.resolve()).then(fn,fn);return q[key]}
@@ -265,9 +273,9 @@ function gateGo(code){var n=String(S.gateName||"").trim().slice(0,24);
   if(!n){toast("Indiquez votre prénom.");return}
   if(!code){toast("Indiquez le code de session donné par le formateur.");return}
   try{localStorage.setItem("bg-name",n)}catch(e){}
-  location.search="?s="+code}
+  location.search="?s="+code+(PROLE?"&p="+PROLE:"")}
 function viewGate(){
-  return '<div class="panel"><div class="prose"><h2>Entrez dans la partie</h2><p>Indiquez votre prénom, puis rejoignez la session de votre formateur avec son code. Le formateur, lui, crée une nouvelle session.</p></div>'+
+  return '<div class="panel"><div class="prose"><h2>Entrez dans la partie</h2><p>Indiquez votre prénom, puis rejoignez la session de votre formateur avec son code. Le formateur, lui, crée une nouvelle session.</p>'+(PROLE?'<div class="info">Vous êtes invité au poste : <strong>'+ROLES.filter(function(R){return R.k===PROLE})[0].n+'</strong>. Saisissez votre prénom et rejoignez la session.</div>':"")+'</div>'+
     '<div class="form"><label class="f" for="gate-name">Votre prénom<input id="gate-name" type="text" maxlength="24" autocomplete="given-name" value="'+esc(S.gateName)+'"></label>'+
     '<label class="f" for="gate-code">Code de session<input id="gate-code" type="text" maxlength="8" autocomplete="off" value="'+esc(S.gateCode)+'"></label></div>'+
     '<div class="row"><button class="btn primary" data-act="join">Rejoindre la session</button><button class="btn" data-act="newcode">Créer une nouvelle session</button></div></div>'+viewRules();
@@ -283,6 +291,9 @@ function nameOf(uid){if(!uid)return "Libre";if(uid===S.uid)return "Vous";return 
 function onState(){
   var g=S.game;
   if(g){if(g.host&&g.hostName)S.names[g.host]=g.hostName;ROLES.forEach(function(R){var s=S.seats[R.k];if(s&&s.uid&&s.name)S.names[s.uid]=s.name})}
+  if(PROLE&&!S.autoClaimed&&S.ready&&g&&!S.local){S.autoClaimed=true;var ps=seat(PROLE);
+    if(myRole()<0&&!(g.auto&&g.auto[PROLE])&&!(ps&&ps.uid))act(ACT.claim(PROLE));
+    if(!isHost())S.tab="poste"}
   if(g&&S.cfgFor!==g.gameId){S.cfg=Object.assign({},DEF,g.params||{});S.cfgFor=g.gameId;S.draft="";S.confirm=null}
   render();
   if(userCap&&g){var ids=[g.host].concat(ROLES.map(function(R){var s=seat(R.k);return s&&s.uid})).filter(function(x){return x&&x.indexOf("u_")===0});
@@ -292,7 +303,7 @@ function onState(){
 /* ---------- actions ---------- */
 function cleanCfg(){var c=Object.assign({},DEF,S.cfg);function cl(k,a,b,int){var v=Number(c[k]);if(!isFinite(v))v=DEF[k];v=Math.min(b,Math.max(a,v));c[k]=int?Math.round(v):v}
   cl("weeks",5,60,1);cl("orderDelay",1,4,1);cl("shipDelay",1,4,1);cl("prodDelay",1,4,1);cl("hold",0,10);cl("back",0,10);cl("initInv",0,100,1);
-  cl("dBase",0,50,1);cl("dNew",0,100,1);cl("dWeek",1,60,1);cl("dLen",1,30,1);c.showWeeks=!!c.showWeeks;c.custom=String(c.custom||"").slice(0,400);return c}
+  cl("dBase",0,50,1);cl("dNew",0,100,1);cl("dWeek",1,60,1);cl("dLen",1,30,1);c.showWeeks=!!c.showWeeks;c.manual={};c.custom=String(c.custom||"").slice(0,400);return c}
 function newGame(keep){var gid=rid(),old=ROLES.map(function(R){var s=seat(R.k);return keep&&s?s.uid:null});
   var auto=keep&&S.game?S.game.auto||{}:{};
   var p=store.setGame({gameId:gid,host:S.uid,status:"lobby",params:cleanCfg(),auto:auto,endWeek:null});
@@ -300,8 +311,16 @@ function newGame(keep){var gid=rid(),old=ROLES.map(function(R){var s=seat(R.k);r
   S.tab="anim";return p}
 function writeSeat(k,patch){return seat(k)?store.updateSeat(k,patch):store.setSeat(k,merge({gameId:S.game.gameId,uid:null,orders:{}},patch))}
 var ACT={
+  invite:function(k){var em=String(S.inv[k]||"").trim();if(!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(em)){toast("Saisissez une adresse e-mail valide pour ce poste.");return}
+    var R=ROLES.filter(function(x){return x.k===k})[0];
+    var body="Bonjour,\n\nVous êtes invité(e) à une partie de Beer Game, un jeu de simulation de chaîne logistique.\nVotre poste : "+R.n+".\n\nCliquez sur ce lien pour rejoindre la partie :\n"+inviteLink(k)+"\n\nSaisissez simplement votre prénom en arrivant.\n\nÀ tout de suite,\n"+S.myName;
+    location.href="mailto:"+em+"?subject="+encodeURIComponent("Invitation Beer Game - poste "+R.n)+"&body="+encodeURIComponent(body);
+    toast("Votre messagerie s\'ouvre avec l\'invitation prête. Il reste à cliquer sur Envoyer.")},
+  copylink:function(k){var l=inviteLink(k);try{navigator.clipboard.writeText(l).then(function(){toast("Lien copié.")},function(){toast(l)})}catch(e){toast(l)}},
   join:function(){gateGo(String(S.gateCode||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8))},
   newcode:function(){var a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",c="";for(var i=0;i<5;i++)c+=a[Math.floor(Math.random()*a.length)];gateGo(c)},
+  demand:function(){var q=Math.round(Number(S.dem));if(S.dem===""||S.dem==null||!isFinite(q)||q<0||q>999){toast("Saisissez une demande entre 0 et 999.");return}
+    var sim=simulate(S.game,S.seats);if(!sim.needDemand||!isHost())return;var m={};m[sim.W]=q;S.dem="";return store.updateGame({params:{manual:m}})},
   solo:function(k){S.cfg=S.cfg||Object.assign({},DEF);var gid=rid(),auto={};ROLES.forEach(function(R){auto[R.k]=R.k!==k});
     var p=store.setGame({gameId:gid,host:S.uid,status:"running",params:cleanCfg(),auto:auto,endWeek:null});
     ROLES.forEach(function(R){p=p.then(function(){return store.setSeat(R.k,{gameId:gid,uid:R.k===k?S.uid:null,orders:{}})})});
@@ -320,10 +339,10 @@ var ACT={
   pause:function(){return store.updateGame({status:"paused"})},
   resume:function(){return store.updateGame({status:"running"})},
   end:function(){var sim=simulate(S.game,S.seats);return store.updateGame({status:"finished",endWeek:Math.max(1,sim.W-1)})},
-  force:function(k){var sim=simulate(S.game,S.seats),i=ROLES.findIndex(function(R){return R.k===k});if(sim.W>sim.T)return;
+  force:function(k){var sim=simulate(S.game,S.seats),i=ROLES.findIndex(function(R){return R.k===k});if(sim.W>sim.T||sim.needDemand)return;
     var o={};o[sim.W]=sim.st[i].rows[sim.W-1].sugg;return writeSeat(k,{orders:o})},
   order:function(){var q=Math.round(Number(S.draft));if(S.draft===""||!isFinite(q)||q<0||q>999){toast("Saisissez une quantité entre 0 et 999.");return}
-    var i=myRole(),sim=simulate(S.game,S.seats);if(i<0||sim.W>sim.T||S.game.status!=="running")return;
+    var i=myRole(),sim=simulate(S.game,S.seats);if(i<0||sim.W>sim.T||sim.needDemand||S.game.status!=="running")return;
     if(sim.st[i].rows[sim.W-1].order!=null)return;var o={};o[sim.W]=q;S.draft="";return store.updateSeat(ROLES[i].k,{orders:o})},
   preset:function(k){var b={classic:{orderDelay:2,shipDelay:2,prodDelay:2,visibility:"classic"},short:{orderDelay:1,shipDelay:1,prodDelay:1,visibility:"classic"},open:{orderDelay:2,shipDelay:2,prodDelay:2,visibility:"full"}}[k];Object.assign(S.cfg,b)}
 };
@@ -336,6 +355,8 @@ app.addEventListener("click",function(e){
   var r=ACT[a](b.getAttribute("data-arg"));render();if(r&&r.then)act(r);
 });
 app.addEventListener("input",function(e){var el=e.target;
+  if(el.id==="dem-qty"){var dq=el.value.replace(/\D/g,"").slice(0,3);if(dq!==el.value)el.value=dq;S.dem=dq;return}
+  var ik=el.getAttribute("data-inv");if(ik){S.inv[ik]=el.value;try{localStorage.setItem("bg-inv-"+CODE,JSON.stringify(S.inv))}catch(e){}return}
   if(el.id==="gate-name"){S.gateName=el.value;return}
   if(el.id==="gate-code"){S.gateCode=el.value;return}
   if(el.id==="order-qty"){var dv=el.value.replace(/\D/g,"").slice(0,3);if(dv!==el.value)el.value=dv;S.draft=dv;return}
@@ -343,7 +364,7 @@ app.addEventListener("input",function(e){var el=e.target;
   S.cfg[k]=el.type==="checkbox"?el.checked:(el.type==="number"?(el.value===""?"":Number(el.value)):el.value);
   if(el.tagName==="SELECT")render();
 });
-app.addEventListener("keydown",function(e){if(e.key==="Enter"&&e.target.id==="order-qty"){e.preventDefault();var r=ACT.order();render();if(r&&r.then)act(r)}});
+app.addEventListener("keydown",function(e){var kid=e.target.id;if(e.key==="Enter"&&(kid==="order-qty"||kid==="dem-qty")){e.preventDefault();var r=kid==="dem-qty"?ACT.demand():ACT.order();render();if(r&&r.then)act(r)}});
 
 /* ---------- graphiques ---------- */
 function niceStep(x){var p=Math.pow(10,Math.floor(Math.log10(Math.max(x,1e-9)))),f=x/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p}
@@ -410,7 +431,7 @@ function seatGrid(hostView){var g=S.game,mine=myRole();
     if(hostView){if(uid&&uid!==S.uid)b+='<button class="btn sm" data-act="release" data-arg="'+R.k+'">Libérer</button>';
       b+='<button class="btn sm" data-act="auto" data-arg="'+R.k+'">'+(auto?"Confier à un joueur":"Passer en automatique")+'</button>'}
     return '<div class="seat'+(i===mine?" mine":"")+'" style="--c:var('+R.c+')"><div class="eyebrow">Maillon '+(i+1)+' sur 4</div><h3>'+R.n+'</h3><p class="small muted">'+R.d+'</p>'+
-      '<p class="who">'+(auto?"Joué par l\'ordinateur":esc(nameOf(uid)))+'</p><div class="row">'+b+'</div></div>'}).join("")+'</div>';
+      '<p class="who">'+(auto?"Joué par l\'ordinateur":esc(nameOf(uid)))+'</p><div class="row">'+b+'</div>'+inviteBox(R,hostView&&!auto&&!uid)+'</div>'}).join("")+'</div>';
 }
 function soloRow(){return '<div class="info"><strong>Tester seul.</strong> Choisissez un poste : l\'ordinateur joue les trois autres et la partie démarre tout de suite, avec les paramètres affichés.<div class="row" style="margin-top:8px">'+
   ROLES.map(function(R){return '<button class="btn sm" data-act="solo" data-arg="'+R.k+'"><span class="dot" style="background:var('+R.c+')"></span> '+R.n+'</button>'}).join("")+'</div></div>'}
@@ -423,11 +444,14 @@ function viewLanding(){
 function hostLine(){var g=S.game;if(isHost())return "";
   return '<p class="small muted">Formateur : '+esc(nameOf(g.host))+'. '+(S.confirm==="takehost"?'Reprendre l\'animation à sa place ? <button class="btn sm" data-act="takehost">Confirmer</button> <button class="btn sm" data-act="cancel">Annuler</button>':'<button class="btn sm" data-confirm="takehost">Reprendre l\'animation</button>')+'</p>';
 }
+function demandBox(sim){if(!sim.needDemand||!isHost())return "";
+  return '<div class="order"><label class="f" for="dem-qty">Semaine '+sim.W+' : quelle est la demande des clients ?<span class="small muted">Vous seul la saisissez (0 à 999 caisses). Les joueurs commandent juste après.</span><input id="dem-qty" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0" value="'+esc(S.dem)+'"></label><button class="btn primary" data-act="demand">Valider la demande</button></div>'}
 function viewPoste(sim){var g=S.game,i=myRole();
   if(g.status==="lobby")return '<div class="panel"><h2>Choisissez votre poste</h2><p class="muted">Un joueur par poste. Le formateur lance la partie quand tout le monde est installé.</p>'+seatGrid(false)+hostLine()+'</div>';
   if(i<0)return '<div class="panel"><h2>La partie est en cours</h2><p class="muted">Vous n\'occupez aucun poste. Prenez un poste libre, ou suivez la partie avec le formateur.</p>'+seatGrid(false)+hostLine()+'</div>';
   var R=ROLES[i],p=g.params,s=sim.st[i],wk=Math.min(sim.W,sim.T),row=s.rows[wk-1],up=i<3?ROLES[i+1].n:"Production",down=i>0?ROLES[i-1].n:"Consommateurs";
   var o='<div class="panel" style="border-top:3px solid var('+R.c+')"><div class="top"><div><div class="eyebrow">Votre poste</div><h2>'+R.n+'</h2></div><div class="pills">'+statusPill(sim)+'<span class="pill num">Coût cumulé '+eur(s.cum)+'</span></div></div>';
+  o+=demandBox(sim);
   var inc=sim.incoming[i].slice().reverse(),nodes='<div class="node"><span class="eyebrow">Fournisseur</span><span>'+up+'</span></div><span class="arrow">→</span>';
   inc.forEach(function(v,k){nodes+='<div class="node"><span class="eyebrow">Arrive dans '+(inc.length-k)+' sem.</span><b>'+n0(v)+'</b></div><span class="arrow">→</span>'});
   nodes+='<div class="node stock"><span class="eyebrow">Stock</span><b>'+n0(row.inv)+'</b>'+crates(row.inv)+'<span class="small muted">reçu cette semaine : '+n0(row.arr)+'</span></div><span class="arrow">→</span>'+
@@ -437,6 +461,7 @@ function viewPoste(sim){var g=S.game,i=myRole();
   if(sim.finished)o+='<div class="info">La partie est terminée. Votre coût total : <strong>'+eur(s.cum)+'</strong>. Rendez-vous dans l\'onglet Débrief.</div>';
   else if(row.order!=null){var wait=ROLES.filter(function(Q,j){return !(g.auto&&g.auto[Q.k])&&sim.st[j].rows[wk-1].order==null}).map(function(Q){return Q.n});
     o+='<div class="info">Commande de la semaine '+wk+' envoyée : <strong>'+n0(row.order)+' caisses</strong>. En attente de : '+esc(wait.join(", ")||"la semaine suivante")+'.</div>'}
+  else if(sim.needDemand)o+='<div class="note">'+(isHost()?"Saisissez la demande des clients ci-dessus pour ouvrir la semaine.":"Le formateur saisit la demande des clients de la semaine "+wk+". Vous pourrez commander juste après.")+'</div>';
   else if(g.status==="paused")o+='<div class="note">Le formateur a mis la partie en pause.</div>';
   else o+='<div class="order"><label class="f" for="order-qty">Semaine '+wk+' : combien de caisses commandez-vous à '+(i<3?"votre fournisseur":"la production")+' ?<span class="small muted">Tapez la quantité de votre choix, de 0 à 999.</span><input id="order-qty" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0" value="'+esc(S.draft)+'"></label><div class="row"><button class="btn sm" data-act="bump" data-arg="-5">−5</button><button class="btn sm" data-act="bump" data-arg="-1">−1</button><button class="btn sm" data-act="bump" data-arg="1">+1</button><button class="btn sm" data-act="bump" data-arg="5">+5</button></div><button class="btn primary" data-act="order">Envoyer la commande</button>'+
     '<span class="small muted">Stock : '+eur(p.hold)+' par caisse et par semaine. Retard : '+eur(p.back)+'.</span></div>';
@@ -461,6 +486,7 @@ function newGameBar(){
 function viewAnim(sim){var g=S.game,p=g.params,o="";
   if(g.status==="lobby"){var c=S.cfg,dem="";
     if(c.demandType==="custom")dem='<label class="f" for="cfg-custom" style="grid-column:1/-1">Demande semaine par semaine, séparée par des virgules (la dernière valeur se prolonge)<input id="cfg-custom" data-cfg="custom" type="text" value="'+esc(c.custom)+'" placeholder="4, 4, 4, 4, 8, 8, 8"></label>';
+    else if(c.demandType==="manual")dem=fld("dBase","Flux de départ dans la chaîne (caisses)",null,'min="0" max="50"')+'<p class="small muted" style="grid-column:1/-1">Vous saisirez la demande des clients au début de chaque semaine, dans l\'onglet Animation. Les joueurs ne peuvent pas commander tant qu\'elle n\'est pas validée.</p>';
     else dem=fld("dBase","Demande de départ (caisses)",null,'min="0" max="50"')+fld("dNew",c.demandType==="spike"?"Demande pendant le pic":"Demande après le palier",null,'min="0" max="100"')+fld("dWeek","Semaine du changement",null,'min="1" max="60"')+(c.demandType==="spike"?fld("dLen","Durée du pic (semaines)",null,'min="1" max="30"'):"");
     var empty=ROLES.filter(function(R){var s=seat(R.k);return !(g.auto&&g.auto[R.k])&&!(s&&s.uid)}).map(function(R){return R.n});
     o+='<div class="panel"><h2>1. Les postes</h2><p class="muted">Les joueurs choisissent leur poste depuis leur écran. Passez en automatique les postes sans joueur.</p>'+seatGrid(true)+'</div>'+
@@ -468,7 +494,7 @@ function viewAnim(sim){var g=S.game,p=g.params,o="";
       '<div class="form">'+fld("weeks","Durée (semaines)",null,'min="5" max="60"')+fld("orderDelay","Délai de transmission des commandes",null,'min="1" max="4"')+fld("shipDelay","Délai de livraison",null,'min="1" max="4"')+fld("prodDelay","Délai de production (usine)",null,'min="1" max="4"')+
       fld("initInv","Stock de départ (caisses)",null,'min="0" max="100"')+fld("hold","Coût de stock (€ par caisse)",null,'min="0" max="10" step="0.1"')+fld("back","Coût de retard (€ par caisse)",null,'min="0" max="10" step="0.1"')+
       sel("visibility","Information visible par les joueurs",[["classic","Classique : son poste uniquement"],["demand","Demande des consommateurs partagée"],["full","Chaîne entièrement visible"]])+
-      sel("demandType","Profil de la demande",[["step","Palier durable"],["spike","Pic temporaire"],["custom","Personnalisée"]])+dem+'</div>'+
+      sel("demandType","Profil de la demande",[["step","Palier durable"],["spike","Pic temporaire"],["custom","Liste préparée à l\'avance"],["manual","Saisie par le formateur, semaine après semaine"]])+dem+'</div>'+
       '<label class="row small" for="cfg-showWeeks"><input id="cfg-showWeeks" data-cfg="showWeeks" type="checkbox"'+(c.showWeeks?" checked":"")+'> Annoncer la durée de la partie aux joueurs (déconseillé : ils vident leurs stocks en fin de partie)</label></div>'+
       '<div class="panel"><h2>3. Lancer</h2>'+(empty.length?'<div class="note">Postes sans joueur : '+esc(empty.join(", "))+'. La partie n\'avancera pas tant qu\'ils ne commandent pas.</div>':"")+
       '<div class="row"><button class="btn primary" data-act="launch">Lancer la partie</button></div>'+soloRow()+'</div>';
@@ -478,10 +504,10 @@ function viewAnim(sim){var g=S.game,p=g.params,o="";
   o+='<div class="panel"><div class="top"><h2>'+(sim.finished?"Partie terminée":"Semaine "+sim.W+" sur "+sim.T)+'</h2><div class="row">';
   if(!sim.finished){o+=g.status==="paused"?'<button class="btn primary" data-act="resume">Reprendre</button>':'<button class="btn" data-act="pause">Mettre en pause</button>';
     o+=S.confirm==="end"?'<span class="small">Terminer maintenant ?</span><button class="btn sm danger" data-act="end">Confirmer</button><button class="btn sm" data-act="cancel">Annuler</button>':'<button class="btn danger" data-confirm="end">Terminer la partie</button>'}
-  o+='</div></div><p class="muted small">Demande des consommateurs cette semaine : <strong>'+n0(demandAt(p,wk))+' caisses</strong>. Délais : commande '+p.orderDelay+' sem., livraison '+p.shipDelay+' sem., production '+p.prodDelay+' sem.</p>'+
+  o+='</div></div>'+demandBox(sim)+'<p class="muted small">Demande des consommateurs cette semaine : <strong>'+(sim.needDemand?"à saisir":n0(demandAt(p,wk))+" caisses")+'</strong>. Délais : commande '+p.orderDelay+' sem., livraison '+p.shipDelay+' sem., production '+p.prodDelay+' sem.</p>'+
     '<div class="tw"><table><thead><tr><th>Poste</th><th class="l">Joueur</th><th>Commande S'+wk+'</th><th>Stock</th><th>Retard</th><th>Coût cumulé</th><th></th></tr></thead><tbody>'+
     ROLES.map(function(R,i){var s=seat(R.k),r=sim.st[i].rows[wk-1],auto=g.auto&&g.auto[R.k],b="";
-      if(!sim.finished){if(!auto&&r.order==null)b+='<button class="btn sm" data-act="force" data-arg="'+R.k+'">Commander à sa place ('+r.sugg+')</button> ';
+      if(!sim.finished){if(!auto&&r.order==null&&!sim.needDemand)b+='<button class="btn sm" data-act="force" data-arg="'+R.k+'">Commander à sa place ('+r.sugg+')</button> ';
         b+='<button class="btn sm" data-act="auto" data-arg="'+R.k+'">'+(auto?"Rendre au joueur":"Automatique")+'</button>'}
       return '<tr><td><span class="dot" style="background:var('+R.c+')"></span> '+R.n+'</td><td class="l">'+(auto?"Ordinateur":esc(nameOf(s&&s.uid)))+'</td><td>'+(r.order==null?'<span class="pill amber">en attente</span>':n0(r.order))+'</td><td>'+n0(r.inv)+'</td><td>'+n0(r.back)+'</td><td>'+eur(r.cum)+'</td><td>'+b+'</td></tr>'}).join("")+
     '</tbody></table></div>'+(sim.finished?'<div class="info">Ouvrez l\'onglet Débrief : il est maintenant visible par tous les joueurs.</div>'+newGameBar():"")+'</div>';
