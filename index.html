@@ -266,13 +266,14 @@ function boot(){
   S.uid=localId();
   var cfg=window.FIREBASE_CONFIG;
   if(!cfg||!cfg.projectId||cfg.projectId==="A_REMPLIR"||!window.firebase){S.local=true;store=localStore();store.start();return}
-  if(!S.myName||!CODE){S.gate=true;S.ready=true;render();return}
+  if(!CODE){S.gate=true;S.ready=true;render();return}
   firebase.initializeApp(cfg);store=fbStore(firebase.firestore());store.start();
 }
-function gateGo(code){var n=String(S.gateName||"").trim().slice(0,24);
-  if(!n){toast("Indiquez votre prénom.");return}
+function gateGo(code,create){var n=String(S.gateName||"").trim().slice(0,24);
+  if(!n&&create){toast("Indiquez votre prénom pour créer la partie.");return}
   if(!code){toast("Indiquez le code de session donné par le formateur.");return}
   try{localStorage.setItem("bg-name",n)}catch(e){}
+  if(create){try{sessionStorage.setItem("bg-create",code)}catch(e){}}
   location.search="?s="+code+(PROLE?"&p="+PROLE:"")}
 function viewGate(){
   return '<div class="panel"><div class="prose"><h2>Entrez dans la partie</h2><p>Indiquez votre prénom, puis rejoignez la session de votre formateur avec son code. Le formateur, lui, crée une nouvelle session.</p>'+(PROLE?'<div class="info">Vous êtes invité au poste : <strong>'+ROLES.filter(function(R){return R.k===PROLE})[0].n+'</strong>. Saisissez votre prénom et rejoignez la session.</div>':"")+'</div>'+
@@ -280,6 +281,23 @@ function viewGate(){
     '<label class="f" for="gate-code">Code de session<input id="gate-code" type="text" maxlength="8" autocomplete="off" value="'+esc(S.gateCode)+'"></label></div>'+
     '<div class="row"><button class="btn primary" data-act="join">Rejoindre la session</button><button class="btn" data-act="newcode">Créer une nouvelle session</button></div></div>'+viewRules();
 }
+function joinLink(){return location.origin+location.pathname+"?s="+CODE}
+function taken(){return ROLES.filter(function(R){var s=seat(R.k);return s&&s.uid}).length}
+function viewHome(){
+  return '<div class="panel"><div class="prose"><h2>Formateur : ouvrez une partie</h2><p>Saisissez votre prénom et créez la partie. Vous obtiendrez un lien d\'invitation à envoyer aux joueurs.</p></div>'+
+    '<div class="order"><label class="f" for="gate-name">Votre prénom<input id="gate-name" type="text" maxlength="24" autocomplete="given-name" style="width:220px;font-size:18px;text-align:left" value="'+esc(S.gateName)+'"></label><button class="btn primary" data-act="newcode">Créer la partie</button></div>'+
+    '<p class="small muted">Joueur ? Ouvrez simplement le lien envoyé par votre formateur. Sinon, saisissez son code :</p><div class="row"><input id="gate-code" type="text" maxlength="8" autocomplete="off" placeholder="CODE" style="width:120px" value="'+esc(S.gateCode)+'"><button class="btn" data-act="join">Rejoindre</button></div></div>'+viewRules();
+}
+function viewWait(){
+  return '<div class="panel"><h2>En attente du formateur</h2><p class="muted">La partie '+CODE+' n\'est pas encore ouverte. Cette page se mettra à jour toute seule dès que le formateur l\'aura créée.</p><div class="row">'+
+    (S.myName?'<button class="btn sm" data-act="create">Je suis le formateur : ouvrir cette partie</button>':"")+'<a class="btn sm" style="text-decoration:none" href="'+esc(location.pathname)+'">Retour à l\'accueil</a></div></div>'+viewRules();
+}
+function nameBar(){if(S.myName||S.local)return "";
+  return '<div class="order"><label class="f" for="gate-name">Bienvenue ! Quel est votre prénom ?<input id="gate-name" type="text" maxlength="24" autocomplete="given-name" style="width:220px;font-size:18px;text-align:left" value="'+esc(S.gateName)+'"></label><span class="small muted">Puis choisissez un poste libre ci-dessous.</span></div>'}
+function sharePanel(){if(S.local||!CODE)return "";
+  return '<div class="panel"><div class="top"><h2>Salle d\'attente</h2><span class="pill on">'+taken()+' / 4 joueurs installés</span></div><p class="muted">Envoyez ce lien aux joueurs. Chacun saisit son prénom et choisit son poste. Vous les voyez arriver ci-dessous.</p>'+
+    '<div class="row"><input id="join-link" type="text" readonly style="flex:1 1 260px;min-width:0" value="'+esc(joinLink())+'"><button class="btn primary" data-act="copyjoin">Copier le lien d\'invitation</button></div></div>'}
+function waitInfo(){return '<div class="info">Salle d\'attente : '+taken()+' poste(s) pris sur 4. La partie démarre quand le formateur la lance.</div>'}
 function act(p){S.busy=true;return Promise.resolve(p).catch(function(e){
   toast(e&&e.code==="invalid_argument"?"Écriture refusée par la base de données.":"L'action n'a pas abouti. Réessayez.")}).then(function(){S.busy=false})}
 
@@ -291,8 +309,10 @@ function nameOf(uid){if(!uid)return "Libre";if(uid===S.uid)return "Vous";return 
 function onState(){
   var g=S.game;
   if(g){if(g.host&&g.hostName)S.names[g.host]=g.hostName;ROLES.forEach(function(R){var s=S.seats[R.k];if(s&&s.uid&&s.name)S.names[s.uid]=s.name})}
+  if(S.ready&&!g&&!S.local&&!S.creating&&S.myName){var cf=null;try{cf=sessionStorage.getItem("bg-create")}catch(e){}
+    if(cf===CODE){S.creating=true;try{sessionStorage.removeItem("bg-create")}catch(e){}act(ACT.create())}}
   if(PROLE&&!S.autoClaimed&&S.ready&&g&&!S.local){S.autoClaimed=true;var ps=seat(PROLE);
-    if(myRole()<0&&!(g.auto&&g.auto[PROLE])&&!(ps&&ps.uid))act(ACT.claim(PROLE));
+    if(S.myName&&myRole()<0&&!(g.auto&&g.auto[PROLE])&&!(ps&&ps.uid))act(ACT.claim(PROLE));
     if(!isHost())S.tab="poste"}
   if(g&&S.cfgFor!==g.gameId){S.cfg=Object.assign({},DEF,g.params||{});S.cfgFor=g.gameId;S.draft="";S.confirm=null}
   render();
@@ -318,7 +338,8 @@ var ACT={
     toast("Votre messagerie s\'ouvre avec l\'invitation prête. Il reste à cliquer sur Envoyer.")},
   copylink:function(k){var l=inviteLink(k);try{navigator.clipboard.writeText(l).then(function(){toast("Lien copié.")},function(){toast(l)})}catch(e){toast(l)}},
   join:function(){gateGo(String(S.gateCode||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8))},
-  newcode:function(){var a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",c="";for(var i=0;i<5;i++)c+=a[Math.floor(Math.random()*a.length)];gateGo(c)},
+  newcode:function(){var a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",c="";for(var i=0;i<5;i++)c+=a[Math.floor(Math.random()*a.length)];gateGo(c,true)},
+  copyjoin:function(){var l=joinLink();try{navigator.clipboard.writeText(l).then(function(){toast("Lien copié. Collez-le dans un e-mail ou une messagerie.")},function(){toast(l)})}catch(e){toast(l)}},
   demand:function(){var q=Math.round(Number(S.dem));if(S.dem===""||S.dem==null||!isFinite(q)||q<0||q>999){toast("Saisissez une demande entre 0 et 999.");return}
     var sim=simulate(S.game,S.seats);if(!sim.needDemand||!isHost())return;var m={};m[sim.W]=q;S.dem="";return store.updateGame({params:{manual:m}})},
   solo:function(k){S.cfg=S.cfg||Object.assign({},DEF);var gid=rid(),auto={};ROLES.forEach(function(R){auto[R.k]=R.k!==k});
@@ -330,7 +351,10 @@ var ACT={
   rematch:function(){return newGame(true)},
   fresh:function(){return newGame(false)},
   takehost:function(){S.tab="anim";return store.updateGame({host:S.uid})},
-  claim:function(k){var mine=myRole(),p=Promise.resolve();
+  claim:function(k){if(!S.myName){var n=String(S.gateName||"").trim().slice(0,24);
+      if(!n){toast("Indiquez d\'abord votre prénom.");var ge=document.getElementById("gate-name");if(ge)ge.focus();return}
+      S.myName=n;try{localStorage.setItem("bg-name",n)}catch(e){}}
+    var mine=myRole(),p=Promise.resolve();
     if(mine>=0&&ROLES[mine].k!==k)p=store.updateSeat(ROLES[mine].k,{uid:null});
     return p.then(function(){return store.claim(k,S.game.gameId)}).then(function(ok){if(!ok)toast("Ce poste vient d'être pris.")})},
   release:function(k){return store.updateSeat(k,{uid:null})},
@@ -425,7 +449,7 @@ function statusPill(sim){var g=S.game;if(!g)return "";
 }
 function seatGrid(hostView){var g=S.game,mine=myRole();
   return '<div class="grid4">'+ROLES.map(function(R,i){var s=seat(R.k),uid=s&&s.uid,auto=g.auto&&g.auto[R.k],b="";
-    if(auto)b+='<span class="pill">Automatique</span>';
+    if(!auto&&uid&&uid!==S.uid)b+='<span class="pill amber">Déjà pris</span>';if(!auto&&uid&&uid===S.uid)b+='<span class="pill on">Votre poste</span>';if(auto)b+='<span class="pill">Automatique</span>';
     else if(!uid)b+='<button class="btn sm primary" data-act="claim" data-arg="'+R.k+'">Prendre ce poste</button>';
     else if(uid===S.uid&&g.status==="lobby")b+='<button class="btn sm" data-act="release" data-arg="'+R.k+'">Libérer</button>';
     if(hostView){if(uid&&uid!==S.uid)b+='<button class="btn sm" data-act="release" data-arg="'+R.k+'">Libérer</button>';
@@ -447,7 +471,7 @@ function hostLine(){var g=S.game;if(isHost())return "";
 function demandBox(sim){if(!sim.needDemand||!isHost())return "";
   return '<div class="order"><label class="f" for="dem-qty">Semaine '+sim.W+' : quelle est la demande des clients ?<span class="small muted">Vous seul la saisissez (0 à 999 caisses). Les joueurs commandent juste après.</span><input id="dem-qty" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0" value="'+esc(S.dem)+'"></label><button class="btn primary" data-act="demand">Valider la demande</button></div>'}
 function viewPoste(sim){var g=S.game,i=myRole();
-  if(g.status==="lobby")return '<div class="panel"><h2>Choisissez votre poste</h2><p class="muted">Un joueur par poste. Le formateur lance la partie quand tout le monde est installé.</p>'+seatGrid(false)+hostLine()+'</div>';
+  if(g.status==="lobby")return '<div class="panel"><h2>Choisissez votre poste</h2><p class="muted">Un joueur par poste. Le formateur lance la partie quand tout le monde est installé.</p>'+waitInfo()+seatGrid(false)+hostLine()+'</div>';
   if(i<0)return '<div class="panel"><h2>La partie est en cours</h2><p class="muted">Vous n\'occupez aucun poste. Prenez un poste libre, ou suivez la partie avec le formateur.</p>'+seatGrid(false)+hostLine()+'</div>';
   var R=ROLES[i],p=g.params,s=sim.st[i],wk=Math.min(sim.W,sim.T),row=s.rows[wk-1],up=i<3?ROLES[i+1].n:"Production",down=i>0?ROLES[i-1].n:"Consommateurs";
   var o='<div class="panel" style="border-top:3px solid var('+R.c+')"><div class="top"><div><div class="eyebrow">Votre poste</div><h2>'+R.n+'</h2></div><div class="pills">'+statusPill(sim)+'<span class="pill num">Coût cumulé '+eur(s.cum)+'</span></div></div>';
@@ -489,7 +513,7 @@ function viewAnim(sim){var g=S.game,p=g.params,o="";
     else if(c.demandType==="manual")dem=fld("dBase","Flux de départ dans la chaîne (caisses)",null,'min="0" max="50"')+'<p class="small muted" style="grid-column:1/-1">Vous saisirez la demande des clients au début de chaque semaine, dans l\'onglet Animation. Les joueurs ne peuvent pas commander tant qu\'elle n\'est pas validée.</p>';
     else dem=fld("dBase","Demande de départ (caisses)",null,'min="0" max="50"')+fld("dNew",c.demandType==="spike"?"Demande pendant le pic":"Demande après le palier",null,'min="0" max="100"')+fld("dWeek","Semaine du changement",null,'min="1" max="60"')+(c.demandType==="spike"?fld("dLen","Durée du pic (semaines)",null,'min="1" max="30"'):"");
     var empty=ROLES.filter(function(R){var s=seat(R.k);return !(g.auto&&g.auto[R.k])&&!(s&&s.uid)}).map(function(R){return R.n});
-    o+='<div class="panel"><h2>1. Les postes</h2><p class="muted">Les joueurs choisissent leur poste depuis leur écran. Passez en automatique les postes sans joueur.</p>'+seatGrid(true)+'</div>'+
+    o+=sharePanel()+'<div class="panel"><h2>1. Les postes</h2><p class="muted">Les joueurs choisissent leur poste depuis leur écran. Passez en automatique les postes sans joueur.</p>'+seatGrid(true)+'</div>'+
       '<div class="panel"><h2>2. Les paramètres</h2><div class="row"><span class="small muted">Préréglages :</span><button class="btn sm" data-act="preset" data-arg="classic">Classique MIT</button><button class="btn sm" data-act="preset" data-arg="short">Délais courts</button><button class="btn sm" data-act="preset" data-arg="open">Chaîne transparente</button></div>'+
       '<div class="form">'+fld("weeks","Durée (semaines)",null,'min="5" max="60"')+fld("orderDelay","Délai de transmission des commandes",null,'min="1" max="4"')+fld("shipDelay","Délai de livraison",null,'min="1" max="4"')+fld("prodDelay","Délai de production (usine)",null,'min="1" max="4"')+
       fld("initInv","Stock de départ (caisses)",null,'min="0" max="100"')+fld("hold","Coût de stock (€ par caisse)",null,'min="0" max="10" step="0.1"')+fld("back","Coût de retard (€ par caisse)",null,'min="0" max="10" step="0.1"')+
@@ -564,12 +588,12 @@ function render(){
   if(S.local)o+='<div class="note">Mode démonstration : Firebase n\'est pas encore configuré (fichier config.js), rien n\'est enregistré ni partagé. Vous pouvez tout de même essayer une partie contre l\'ordinateur.</div>';
   if(S.dead)o+='<div class="note">La connexion à la session partagée a été interrompue. Rouvrez la page pour reprendre.</div>';
   if(!S.ready){o+='<div class="panel"><p class="muted">'+(S.slow?"La session partagée ne répond pas encore. La page se mettra à jour dès qu\'elle sera joignable.":"Connexion à la session partagée…")+'</p></div>'}
-  else if(S.gate){o+=viewGate()}else if(!g){o+=viewLanding()}
+  else if(S.gate){o+=viewHome()}else if(!g){o+=viewWait()}
   else{
     var tabs=[["poste","Mon poste"]];if(isHost())tabs.push(["anim","Animation"]);if(isHost()||sim.finished)tabs.push(["debrief","Débrief"]);tabs.push(["regles","Règles"]);if(isHost())tabs.push(["guide","Guide du formateur"]);
     if(!tabs.some(function(t){return t[0]===S.tab}))S.tab=isHost()?"anim":"poste";
     o+='<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab" role="tab" aria-selected="'+(S.tab===t[0])+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join("")+'</div><div class="stack">';
-    o+=S.tab==="anim"?viewAnim(sim):S.tab==="debrief"?viewDebrief(sim):S.tab==="regles"?viewRules():S.tab==="guide"?viewGuide():viewPoste(sim);
+    o+=nameBar();o+=S.tab==="anim"?viewAnim(sim):S.tab==="debrief"?viewDebrief(sim):S.tab==="regles"?viewRules():S.tab==="guide"?viewGuide():viewPoste(sim);
     o+='</div>';
   }
   if(S.toast)o+='<div class="toast" role="status">'+esc(S.toast)+'</div>';
