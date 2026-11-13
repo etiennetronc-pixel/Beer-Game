@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Beer Game Atelier</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Chakra+Petch:wght@500;600;700&family=Bungee&display=swap">
+<style>
+/* Layout : une table de jeu. En-tête d'état, onglets par usage (poste, animation, débrief, règles, guide),
+   et la chaîne logistique toujours dessinée de gauche (fournisseur) à droite (client). */
+:root{
+  color-scheme:dark;
+  --bg:#120c06; --surface:#1d140b; --sunk:#2a1d0f; --ink:#fff3dc; --ink2:#e2cfa8; --muted:#a8936c;
+  --line:#4a3618; --axis:#6b5026; --brand:#f5a623; --brand-ink:#1a1005; --brand-soft:#3b2a0c;
+  --amber:#ffd166; --amber-soft:#3a2a10;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --good:#2fc52f; --crit:#ff6b6b; --warn-bg:#3a2a10; --warn-ink:#ffd98a;
+  --display:"Chakra Petch","Segoe UI",system-ui,sans-serif; --body:"Inter","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1080px;margin:0 auto;padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;line-height:1.2}
+h1{font-size:24px;font-weight:700;letter-spacing:-.01em} h2{font-size:19px;font-weight:600} h3{font-size:15px;font-weight:600}
+p{margin:0} .prose{max-width:66ch;display:flex;flex-direction:column;gap:10px}
+.prose ul,.prose ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.muted{color:var(--muted)} .small{font-size:13px} .num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.brand span{color:var(--muted);font-size:13px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--sunk);font-size:12.5px;font-weight:500;color:var(--ink2);white-space:nowrap}
+.pill.on{background:var(--brand-soft);color:var(--ink)} .pill.amber{background:var(--amber-soft);color:var(--ink)}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{appearance:none;border:0;background:none;font:inherit;font-weight:500;color:var(--ink2);padding:9px 12px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--brand)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.stack{display:flex;flex-direction:column;gap:18px} .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.btn{appearance:none;font:inherit;font-weight:600;border-radius:8px;padding:8px 14px;border:1px solid var(--axis);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--ink2)} .btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.danger{color:var(--crit);border-color:var(--crit)} .btn.sm{padding:4px 10px;font-size:13px;font-weight:500}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--axis);border-radius:8px;padding:7px 10px;max-width:100%}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink2);font-weight:500;min-width:0}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.note{background:var(--warn-bg);color:var(--warn-ink);border-radius:8px;padding:9px 12px;font-size:13.5px}
+.info{background:var(--sunk);border-radius:8px;padding:9px 12px;font-size:13.5px;color:var(--ink2)}
+.seat{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;background:var(--surface);border-top:3px solid var(--c)}
+.seat.mine{background:var(--brand-soft)}
+.seat .who{font-weight:600}
+/* chaîne du poste */
+.chain{display:flex;align-items:stretch;gap:8px;overflow-x:auto;padding-bottom:4px}
+.node{flex:1 0 108px;border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:2px;background:var(--sunk);min-width:108px}
+.node b{font-family:var(--display);font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.node.stock{background:var(--brand-soft);border-color:var(--brand)} .node.late b{color:var(--crit)}
+.arrow{align-self:center;color:var(--muted);flex:none;font-size:18px}
+.order{display:flex;flex-wrap:wrap;gap:10px;align-items:end;padding:14px;border-radius:10px;background:var(--amber-soft)}
+.order input{width:110px;font-size:22px;font-family:var(--display);font-weight:600;text-align:center}
+.tw{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th{font-weight:600;color:var(--ink2);font-size:12.5px} th:first-child,td:first-child{text-align:left}
+td.l,th.l{text-align:left}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:2px;background:var(--surface)}
+.tile b{font-family:var(--display);font-size:24px}
+.chart{position:relative;overflow-x:auto} .chart svg{display:block;min-width:600px;width:100%;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--ink2)}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid var(--c);vertical-align:middle;margin-right:6px}
+.legend i.dash{border-top-style:dashed}
+.tip{position:absolute;top:8px;pointer-events:none;background:var(--surface);border:1px solid var(--axis);border-radius:8px;padding:8px 10px;font-size:12.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:150px;z-index:2}
+.tip div{display:flex;justify-content:space-between;gap:14px;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-size:13.5px;z-index:20;max-width:90vw}
+details summary{cursor:pointer;font-weight:600}
+.steps{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.steps span:nth-child(odd){font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+
+/* ---- habillage jeu ---- */
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+/* la bande du bas reste toujours dégagée pour la chaîne animée */
+html,body{height:100%} body{overflow:hidden}
+#scroll{position:relative;z-index:1;height:calc(100% - clamp(84px,16vw,180px));overflow-y:auto;-webkit-mask-image:linear-gradient(#000 calc(100% - 28px),transparent);mask-image:linear-gradient(#000 calc(100% - 28px),transparent)}
+.wrap{padding-block:20px 40px}
+.panel{background:rgba(27,18,9,.9);box-shadow:0 0 0 1px rgba(245,166,35,.06),0 14px 34px rgba(0,0,0,.45);backdrop-filter:blur(5px);border-radius:14px}
+h1{font-family:"Bungee",var(--display);font-weight:400;font-size:28px;color:var(--brand);text-shadow:0 2px 0 #7a4a05,0 0 22px rgba(245,166,35,.45);letter-spacing:.02em}
+h2{text-transform:uppercase;letter-spacing:.04em}
+.eyebrow,th{font-family:var(--display)}
+.btn{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;border-radius:10px;background:#2a1d0f;box-shadow:0 3px 0 #0a0603;transition:transform .06s,box-shadow .06s}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #0a0603}
+.btn.primary{background:linear-gradient(#ffc24d,#f5a623);border-color:#ffd98a;color:#1a1005;box-shadow:0 3px 0 #8a5a08,0 0 18px rgba(245,166,35,.35)}
+.btn.primary:active{box-shadow:0 1px 0 #8a5a08}
+.pill{font-family:var(--display);border:1px solid var(--line);background:#21160a}
+.pill.on{background:#3b2a0c;border-color:var(--brand);color:var(--brand)}
+.tabs{border-bottom:0;gap:6px;padding-bottom:4px}
+.tab{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:13px;background:rgba(27,18,9,.85);border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.tab[aria-selected="true"]{background:var(--brand);color:#1a1005;border-color:#ffd98a}
+.seat{background:rgba(33,22,10,.92);transition:transform .12s}
+.seat:hover{transform:translateY(-3px)}
+.seat.mine{background:#3b2a0c;box-shadow:0 0 0 1px var(--c),0 0 22px rgba(245,166,35,.25)}
+.node{background:#21160a}
+.node b{font-size:30px}
+.node.stock{background:#3b2a0c;box-shadow:inset 0 0 18px rgba(245,166,35,.25)}
+.node.stock b{color:var(--brand)}
+.node.late{border-color:var(--crit);animation:alarm 1.2s ease-in-out infinite}
+@keyframes alarm{50%{box-shadow:0 0 16px rgba(255,107,107,.5)}}
+.arrow{color:var(--brand);animation:flow 1s ease-in-out infinite}
+@keyframes flow{50%{transform:translateX(4px)}}
+.crates{display:flex;flex-wrap:wrap;gap:2px;margin:4px 0;max-width:120px}
+.crates i{width:9px;height:9px;border-radius:2px;background:linear-gradient(#ffc24d,#c98500);border:1px solid #7a4a05}
+.order{background:linear-gradient(180deg,#3b2a0c,#2a1d0f);border:1px solid var(--brand);box-shadow:0 0 24px rgba(245,166,35,.18)}
+.order input{background:#120c06;border-color:var(--brand);color:var(--brand);width:120px;font-size:28px}
+.order input::placeholder{color:#7a5a2c}
+.order input:focus{box-shadow:0 0 0 3px rgba(245,166,35,.35)}
+.lights{display:flex;flex-wrap:wrap;gap:8px}
+.light{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:#21160a;font-size:12.5px;font-family:var(--display);color:var(--muted)}
+.light .dot{background:#5a4424}
+.light.ok{color:var(--ink);border-color:var(--good)}
+.light.ok .dot{background:var(--good);box-shadow:0 0 8px var(--good)}
+.tile{background:rgba(33,22,10,.92)} .tile b{color:var(--brand)}
+.toast{background:var(--brand);color:#1a1005;font-family:var(--display);font-weight:600}
+.weekflash{position:fixed;inset:0;z-index:30;display:grid;place-items:center;pointer-events:none;padding:16px;font-family:"Bungee",sans-serif;font-size:clamp(34px,9vw,84px);color:#ffc24d;text-shadow:0 4px 0 #7a4a05,0 0 40px rgba(245,166,35,.7);text-align:center;animation:wf 1.6s ease-out forwards}
+@keyframes wf{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.05)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.25)}}
+@keyframes wfr{0%,80%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion: reduce){.arrow,.node.late{animation:none}.weekflash{animation:wfr 1.6s forwards}.seat:hover{transform:none}}
+</style>
+</head>
+<body>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+<div id="scroll"><div class="wrap" id="app"><div class="panel"><h1>Beer Game</h1><p class="muted">Connexion à la session partagée…</p></div></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+var ROLES=[
+ {k:"retailer",n:"Détaillant",c:"--s1",d:"Vend au consommateur final. Commande au grossiste."},
+ {k:"wholesaler",n:"Grossiste",c:"--s2",d:"Livre le détaillant. Commande au distributeur."},
+ {k:"distributor",n:"Distributeur",c:"--s3",d:"Livre le grossiste. Commande à l'usine."},
+ {k:"factory",n:"Usine",c:"--s4",d:"Livre le distributeur. Lance la production de bière."}];
+var DEF={weeks:30,orderDelay:2,shipDelay:2,prodDelay:2,hold:0.5,back:1,initInv:12,demandType:"step",dBase:4,dNew:8,dWeek:5,dLen:3,custom:"",visibility:"classic",showWeeks:false};
+
+/* ---------- moteur de simulation (pur) ---------- */
+function demandAt(p,t){
+  if(p.demandType==="custom"){var a=String(p.custom||"").split(/[\s,;]+/).map(Number).filter(function(x){return isFinite(x)&&x>=0});if(a.length)return a[Math.min(t,a.length)-1]}
+  if(p.demandType==="spike")return (t>=p.dWeek&&t<p.dWeek+p.dLen)?p.dNew:p.dBase;
+  return t>=p.dWeek?p.dNew:p.dBase;
+}
+function seatOrders(g,seats,k){var s=seats[k];return (s&&s.gameId===g.gameId&&s.orders)||{}}
+function simulate(g,seats){
+  var p=g.params,f=p.dBase,T=g.endWeek!=null?g.endWeek:p.weeks,auto=g.auto||{},W=T+1;
+  ROLES.forEach(function(R){if(auto[R.k])return;var o=seatOrders(g,seats,R.k),n=0;while(o[n+1]!=null)n++;W=Math.min(W,n+1)});
+  if(g.status==="lobby")W=1;
+  var last=Math.min(W,T);
+  var st=ROLES.map(function(R,i){var L=i<3?p.orderDelay+p.shipDelay:p.prodDelay;return{inv:p.initInv,back:0,cum:0,sm:f,onOrder:f*L,L:L,rows:[]}});
+  function gOrd(j,t){if(t<1)return f;var o=st[j].rows[t-1].order;return o==null?0:o}
+  function gShip(j,t){return t<1?f:st[j].rows[t-1].ship}
+  for(var t=1;t<=last;t++){
+    ROLES.forEach(function(R,i){
+      var s=st[i],arr=i<3?gShip(i+1,t-p.shipDelay):gOrd(3,t-p.prodDelay);
+      s.inv+=arr;s.onOrder-=arr;
+      var inc=i===0?demandAt(p,t):gOrd(i-1,t-p.orderDelay);
+      var need=s.back+inc,ship=Math.min(s.inv,need);s.inv-=ship;s.back=need-ship;
+      var cost=s.inv*p.hold+s.back*p.back;s.cum+=cost;
+      s.sm+=0.3*(inc-s.sm);
+      var sugg=Math.max(0,Math.round(s.sm+0.3*(p.initInv-(s.inv-s.back))+0.3*(s.sm*(s.L-1)-s.onOrder)));
+      var order=seatOrders(g,seats,R.k)[t];
+      if(order==null)order=auto[R.k]?sugg:null;
+      if(order!=null)s.onOrder+=order;
+      s.rows.push({t:t,arr:arr,inc:inc,ship:ship,inv:s.inv,back:s.back,cost:cost,cum:s.cum,order:order,sugg:sugg});
+    });
+  }
+  /* arrivées déjà connues pour les semaines suivantes */
+  var incoming=ROLES.map(function(R,i){var out=[];if(W>T)return out;var max=i<3?p.shipDelay:p.prodDelay-1;
+    for(var k=1;k<=max;k++)out.push(i<3?gShip(i+1,W+k-p.shipDelay):gOrd(3,W+k-p.prodDelay));return out});
+  return{W:W,T:T,st:st,incoming:incoming,finished:W>T||g.status==="finished"};
+}
+function variance(a){if(a.length<2)return 0;var m=a.reduce(function(x,y){return x+y},0)/a.length;return a.reduce(function(x,y){return x+(y-m)*(y-m)},0)/a.length}
+if(typeof module!=="undefined"){module.exports={simulate:simulate,DEF:DEF}}
+</script>
+<script>
+"use strict";
+(function(){
+var app=document.getElementById("app");
+var S={ready:false,local:false,slow:false,game:undefined,seats:{},uid:null,names:{},tab:null,cfg:null,cfgFor:null,draft:"",confirm:null,toast:null,busy:false};
+var store=null,userCap=null,charts={},chartN=0;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function n0(x){return Number(x).toLocaleString("fr-FR")}
+function eur(x){return Number(x).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"}
+function rid(){return Math.random().toString(36).slice(2,10)}
+function toast(m){S.toast=m;render();clearTimeout(toast.t);toast.t=setTimeout(function(){S.toast=null;render()},4500)}
+function merge(a,b){var o=Object.assign({},a);Object.keys(b).forEach(function(k){var v=b[k];o[k]=(v&&typeof v==="object"&&!Array.isArray(v))?merge(a&&a[k]&&typeof a[k]==="object"?a[k]:{},v):v});return o}
+
+/* ---------- stockage : base partagée, ou mémoire locale en démonstration ---------- */
+function localStore(){
+  var mem={game:null,seats:{}};function fire(){S.game=mem.game;S.seats=Object.assign({},mem.seats);S.ready=true;onState()}
+  return{start:function(){fire()},
+    setGame:function(d){mem.game=d;fire();return Promise.resolve()},
+    updateGame:function(d){mem.game=merge(mem.game,d);fire();return Promise.resolve()},
+    setSeat:function(k,d){mem.seats[k]=d;fire();return Promise.resolve()},
+    updateSeat:function(k,d){mem.seats[k]=merge(mem.seats[k]||{},d);fire();return Promise.resolve()},
+    claim:function(k,gid){var s=mem.seats[k];if(s&&s.gameId===gid&&s.uid&&s.uid!==S.uid)return Promise.resolve(false);
+      mem.seats[k]=(s&&s.gameId===gid)?merge(s,{uid:S.uid}):{gameId:gid,uid:S.uid,orders:{}};fire();return Promise.resolve(true)}};
+}
+function remoteStore(db){
+  var gref=db.doc("beergame/current"),col=db.collection("seats"),q={},got=0;
+  function chain(key,fn){q[key]=(q[key]||Promise.resolve()).then(fn,fn);return q[key]}
+  function fail(e){S.ready=true;S.dead=true;render()}
+  return{start:function(){
+      var timer=setTimeout(function(){S.slow=true;render()},10000);
+      function ok(meta){got|=meta;if(got===3){S.ready=true}if(S.ready){clearTimeout(timer);S.slow=false}onState()}
+      gref.onSnapshot(function(s){S.game=s.exists?s.data():null;ok(1)},function(e){clearTimeout(timer);fail(e)});
+      col.onSnapshot(function(s){var m={};s.docs.forEach(function(d){m[d.id]=d.data()});S.seats=m;ok(2)},function(e){clearTimeout(timer);fail(e)});
+    },
+    setGame:function(d){return chain("g",function(){return gref.set(d)})},
+    updateGame:function(d){return chain("g",function(){return gref.update(d)})},
+    setSeat:function(k,d){return chain(k,function(){return col.doc(k).set(d)})},
+    updateSeat:function(k,d){return chain(k,function(){return col.doc(k).update(d)})},
+    claim:function(k,gid){return chain(k,function(){var ref=col.doc(k);
+      return ref.acquire({holder:S.uid,ttlMs:4000}).then(function(l){if(!l.acquired)return false;
+        return ref.get().then(function(s){var d=s.exists?s.data():null;
+          if(d&&d.gameId===gid&&d.uid&&d.uid!==S.uid)return false;
+          var w=(d&&d.gameId===gid)?ref.update({uid:S.uid}):ref.set({gameId:gid,uid:S.uid,orders:{}});
+          return w.then(function(){return true})})})})}};
+}
+function localId(){var id=null;try{id=localStorage.getItem("bg-uid")}catch(e){}if(!id){id="anon-"+rid();try{localStorage.setItem("bg-uid",id)}catch(e){}}return id}
+
+var CODE=(new URLSearchParams(location.search).get("s")||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);
+S.myName="";try{S.myName=localStorage.getItem("bg-name")||""}catch(e){}
+S.gateName=S.myName;S.gateCode=CODE;
+function fbStore(fsdb){
+  var gref=fsdb.collection("games").doc(CODE),col=gref.collection("seats"),q={},got=0;
+  function chain(key,fn){q[key]=(q[key]||Promise.resolve()).then(fn,fn);return q[key]}
+  function nm(d){if(d&&d.uid)d=Object.assign({name:d.uid===S.uid?S.myName:(S.names[d.uid]||"")},d);return d}
+  return{start:function(){
+      var timer=setTimeout(function(){S.slow=true;render()},10000);
+      function ok(m){got|=m;if(got===3){S.ready=true;clearTimeout(timer);S.slow=false}onState()}
+      function fail(){clearTimeout(timer);S.ready=true;S.dead=true;render()}
+      gref.onSnapshot(function(s){S.game=s.exists?s.data():null;ok(1)},fail);
+      col.onSnapshot(function(s){var m={};s.forEach(function(d){m[d.id]=d.data()});S.seats=m;ok(2)},fail)},
+    setGame:function(d){d=Object.assign({hostName:S.myName},d);return chain("g",function(){return gref.set(d)})},
+    updateGame:function(d){if(d.host)d=Object.assign({hostName:S.myName},d);return chain("g",function(){return gref.set(d,{merge:true})})},
+    setSeat:function(k,d){d=nm(d);return chain(k,function(){return col.doc(k).set(d)})},
+    updateSeat:function(k,d){return chain(k,function(){return col.doc(k).set(d,{merge:true})})},
+    claim:function(k,gid){return chain(k,function(){var ref=col.doc(k);return fsdb.runTransaction(function(tx){return tx.get(ref).then(function(s){var d=s.exists?s.data():null;
+      if(d&&d.gameId===gid&&d.uid&&d.uid!==S.uid)return false;
+      if(d&&d.gameId===gid)tx.update(ref,{uid:S.uid,name:S.myName});else tx.set(ref,{gameId:gid,uid:S.uid,name:S.myName,orders:{}});
+      return true})})})}};
+}
+function boot(){
+  S.uid=localId();
+  var cfg=window.FIREBASE_CONFIG;
+  if(!cfg||!cfg.projectId||cfg.projectId==="A_REMPLIR"||!window.firebase){S.local=true;store=localStore();store.start();return}
+  if(!S.myName||!CODE){S.gate=true;S.ready=true;render();return}
+  firebase.initializeApp(cfg);store=fbStore(firebase.firestore());store.start();
+}
+function gateGo(code){var n=String(S.gateName||"").trim().slice(0,24);
+  if(!n){toast("Indiquez votre prénom.");return}
+  if(!code){toast("Indiquez le code de session donné par le formateur.");return}
+  try{localStorage.setItem("bg-name",n)}catch(e){}
+  location.search="?s="+code}
+function viewGate(){
+  return '<div class="panel"><div class="prose"><h2>Entrez dans la partie</h2><p>Indiquez votre prénom, puis rejoignez la session de votre formateur avec son code. Le formateur, lui, crée une nouvelle session.</p></div>'+
+    '<div class="form"><label class="f" for="gate-name">Votre prénom<input id="gate-name" type="text" maxlength="24" autocomplete="given-name" value="'+esc(S.gateName)+'"></label>'+
+    '<label class="f" for="gate-code">Code de session<input id="gate-code" type="text" maxlength="8" autocomplete="off" value="'+esc(S.gateCode)+'"></label></div>'+
+    '<div class="row"><button class="btn primary" data-act="join">Rejoindre la session</button><button class="btn" data-act="newcode">Créer une nouvelle session</button></div></div>'+viewRules();
+}
+function act(p){S.busy=true;return Promise.resolve(p).catch(function(e){
+  toast(e&&e.code==="invalid_argument"?"Écriture refusée par la base de données.":"L'action n'a pas abouti. Réessayez.")}).then(function(){S.busy=false})}
+
+/* ---------- état dérivé ---------- */
+function seat(k){var s=S.seats[k];return s&&S.game&&s.gameId===S.game.gameId?s:null}
+function myRole(){for(var i=0;i<4;i++){var s=seat(ROLES[i].k);if(s&&s.uid===S.uid)return i}return -1}
+function isHost(){return !!S.game&&S.game.host===S.uid}
+function nameOf(uid){if(!uid)return "Libre";if(uid===S.uid)return "Vous";return S.names[uid]||"Joueur"}
+function onState(){
+  var g=S.game;
+  if(g){if(g.host&&g.hostName)S.names[g.host]=g.hostName;ROLES.forEach(function(R){var s=S.seats[R.k];if(s&&s.uid&&s.name)S.names[s.uid]=s.name})}
+  if(g&&S.cfgFor!==g.gameId){S.cfg=Object.assign({},DEF,g.params||{});S.cfgFor=g.gameId;S.draft="";S.confirm=null}
+  render();
+  if(userCap&&g){var ids=[g.host].concat(ROLES.map(function(R){var s=seat(R.k);return s&&s.uid})).filter(function(x){return x&&x.indexOf("u_")===0});
+    if(ids.length)userCap.profiles(ids).then(function(ps){var ch=false;ids.forEach(function(i){var nm=ps[i]&&ps[i].name||"";if(nm&&S.names[i]!==nm){S.names[i]=nm;ch=true}});if(ch)render()})}
+}
+
+/* ---------- actions ---------- */
+function cleanCfg(){var c=Object.assign({},DEF,S.cfg);function cl(k,a,b,int){var v=Number(c[k]);if(!isFinite(v))v=DEF[k];v=Math.min(b,Math.max(a,v));c[k]=int?Math.round(v):v}
+  cl("weeks",5,60,1);cl("orderDelay",1,4,1);cl("shipDelay",1,4,1);cl("prodDelay",1,4,1);cl("hold",0,10);cl("back",0,10);cl("initInv",0,100,1);
+  cl("dBase",0,50,1);cl("dNew",0,100,1);cl("dWeek",1,60,1);cl("dLen",1,30,1);c.showWeeks=!!c.showWeeks;c.custom=String(c.custom||"").slice(0,400);return c}
+function newGame(keep){var gid=rid(),old=ROLES.map(function(R){var s=seat(R.k);return keep&&s?s.uid:null});
+  var auto=keep&&S.game?S.game.auto||{}:{};
+  var p=store.setGame({gameId:gid,host:S.uid,status:"lobby",params:cleanCfg(),auto:auto,endWeek:null});
+  ROLES.forEach(function(R,i){p=p.then(function(){return store.setSeat(R.k,{gameId:gid,uid:old[i]||null,orders:{}})})});
+  S.tab="anim";return p}
+function writeSeat(k,patch){return seat(k)?store.updateSeat(k,patch):store.setSeat(k,merge({gameId:S.game.gameId,uid:null,orders:{}},patch))}
+var ACT={
+  join:function(){gateGo(String(S.gateCode||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8))},
+  newcode:function(){var a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789",c="";for(var i=0;i<5;i++)c+=a[Math.floor(Math.random()*a.length)];gateGo(c)},
+  solo:function(k){S.cfg=S.cfg||Object.assign({},DEF);var gid=rid(),auto={};ROLES.forEach(function(R){auto[R.k]=R.k!==k});
+    var p=store.setGame({gameId:gid,host:S.uid,status:"running",params:cleanCfg(),auto:auto,endWeek:null});
+    ROLES.forEach(function(R){p=p.then(function(){return store.setSeat(R.k,{gameId:gid,uid:R.k===k?S.uid:null,orders:{}})})});
+    S.tab="poste";return p},
+  bump:function(d){S.draft=String(Math.max(0,Math.min(999,(Math.round(Number(S.draft))||0)+Number(d))))},
+  create:function(){S.cfg=S.cfg||Object.assign({},DEF);return newGame(false)},
+  rematch:function(){return newGame(true)},
+  fresh:function(){return newGame(false)},
+  takehost:function(){S.tab="anim";return store.updateGame({host:S.uid})},
+  claim:function(k){var mine=myRole(),p=Promise.resolve();
+    if(mine>=0&&ROLES[mine].k!==k)p=store.updateSeat(ROLES[mine].k,{uid:null});
+    return p.then(function(){return store.claim(k,S.game.gameId)}).then(function(ok){if(!ok)toast("Ce poste vient d'être pris.")})},
+  release:function(k){return store.updateSeat(k,{uid:null})},
+  auto:function(k){var a={};a[k]=!(S.game.auto&&S.game.auto[k]);return store.updateGame({auto:a})},
+  launch:function(){return store.updateGame({status:"running",params:cleanCfg()})},
+  pause:function(){return store.updateGame({status:"paused"})},
+  resume:function(){return store.updateGame({status:"running"})},
+  end:function(){var sim=simulate(S.game,S.seats);return store.updateGame({status:"finished",endWeek:Math.max(1,sim.W-1)})},
+  force:function(k){var sim=simulate(S.game,S.seats),i=ROLES.findIndex(function(R){return R.k===k});if(sim.W>sim.T)return;
+    var o={};o[sim.W]=sim.st[i].rows[sim.W-1].sugg;return writeSeat(k,{orders:o})},
+  order:function(){var q=Math.round(Number(S.draft));if(S.draft===""||!isFinite(q)||q<0||q>999){toast("Saisissez une quantité entre 0 et 999.");return}
+    var i=myRole(),sim=simulate(S.game,S.seats);if(i<0||sim.W>sim.T||S.game.status!=="running")return;
+    if(sim.st[i].rows[sim.W-1].order!=null)return;var o={};o[sim.W]=q;S.draft="";return store.updateSeat(ROLES[i].k,{orders:o})},
+  preset:function(k){var b={classic:{orderDelay:2,shipDelay:2,prodDelay:2,visibility:"classic"},short:{orderDelay:1,shipDelay:1,prodDelay:1,visibility:"classic"},open:{orderDelay:2,shipDelay:2,prodDelay:2,visibility:"full"}}[k];Object.assign(S.cfg,b)}
+};
+app.addEventListener("click",function(e){
+  var t=e.target.closest("[data-tab]");if(t){S.tab=t.getAttribute("data-tab");S.confirm=null;render();return}
+  var c=e.target.closest("[data-confirm]");if(c){S.confirm=c.getAttribute("data-confirm");render();return}
+  var b=e.target.closest("[data-act]");if(!b||S.busy)return;
+  var a=b.getAttribute("data-act");S.confirm=null;
+  if(a==="cancel"){render();return}
+  var r=ACT[a](b.getAttribute("data-arg"));render();if(r&&r.then)act(r);
+});
+app.addEventListener("input",function(e){var el=e.target;
+  if(el.id==="gate-name"){S.gateName=el.value;return}
+  if(el.id==="gate-code"){S.gateCode=el.value;return}
+  if(el.id==="order-qty"){var dv=el.value.replace(/\D/g,"").slice(0,3);if(dv!==el.value)el.value=dv;S.draft=dv;return}
+  var k=el.getAttribute("data-cfg");if(!k||!S.cfg)return;
+  S.cfg[k]=el.type==="checkbox"?el.checked:(el.type==="number"?(el.value===""?"":Number(el.value)):el.value);
+  if(el.tagName==="SELECT")render();
+});
+app.addEventListener("keydown",function(e){if(e.key==="Enter"&&e.target.id==="order-qty"){e.preventDefault();var r=ACT.order();render();if(r&&r.then)act(r)}});
+
+/* ---------- graphiques ---------- */
+function niceStep(x){var p=Math.pow(10,Math.floor(Math.log10(Math.max(x,1e-9)))),f=x/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p}
+function lineChart(title,series,T){
+  var id="ch"+(chartN++),Wd=720,H=290,m={l:42,r:104,t:14,b:32},lo=0,hi=1;
+  series.forEach(function(s){s.v.forEach(function(x){if(x!=null){lo=Math.min(lo,x);hi=Math.max(hi,x)}})});
+  var step=niceStep((hi-lo)/5);step=Math.max(step,1);lo=Math.floor(lo/step)*step;hi=Math.ceil(hi/step)*step;
+  var n=Math.max(T,2),X=function(t){return m.l+(t-1)/(n-1)*(Wd-m.l-m.r)},Y=function(v){return m.t+(hi-v)/(hi-lo)*(H-m.t-m.b)};
+  var o='<svg viewBox="0 0 '+Wd+' '+H+'" role="img" aria-label="'+esc(title)+'">';
+  for(var v=lo;v<=hi+1e-9;v+=step){o+='<line x1="'+m.l+'" x2="'+(Wd-m.r)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--'+(v===0?"axis":"line")+')" stroke-width="1"/>'+
+    '<text x="'+(m.l-8)+'" y="'+(Y(v)+4)+'" text-anchor="end" font-size="11" fill="var(--muted)">'+n0(v)+'</text>'}
+  var xs=T<=12?1:T<=30?5:10;
+  for(var t=1;t<=T;t++)if(t===1||t%xs===0)o+='<text x="'+X(t)+'" y="'+(H-10)+'" text-anchor="middle" font-size="11" fill="var(--muted)">S'+t+'</text>';
+  var ends=[];
+  series.forEach(function(s){var d="",lastT=0;s.v.forEach(function(x,i){if(x==null)return;d+=(d?"L":"M")+X(i+1).toFixed(1)+" "+Y(x).toFixed(1);lastT=i+1});
+    if(!d)return;o+='<path d="'+d+'" fill="none" stroke="var('+s.c+')" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"'+(s.dash?' stroke-dasharray="5 4"':'')+'/>';
+    o+='<circle cx="'+X(lastT)+'" cy="'+Y(s.v[lastT-1])+'" r="4" fill="var('+s.c+')" stroke="var(--surface)" stroke-width="2"/>';
+    ends.push({x:X(lastT),y:Y(s.v[lastT-1]),n:s.n})});
+  ends.sort(function(a,b){return a.y-b.y});
+  for(var i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<14)ends[i].y=ends[i-1].y+14;
+  var over=ends.length?ends[ends.length-1].y-(H-m.b):0;if(over>0)ends.forEach(function(e){e.y-=over});
+  ends.forEach(function(e){o+='<text x="'+(e.x+9)+'" y="'+(e.y+4)+'" font-size="11.5" fill="var(--ink2)">'+esc(e.n)+'</text>'});
+  o+='<line class="cross" x1="0" x2="0" y1="'+m.t+'" y2="'+(H-m.b)+'" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/></svg>';
+  charts[id]={series:series,T:T,l:m.l,r:m.r,W:Wd};
+  var lg=series.map(function(s){return '<span><i class="'+(s.dash?"dash":"")+'" style="--c:var('+s.c+')"></i>'+esc(s.n)+'</span>'}).join("");
+  return '<div><h3>'+esc(title)+'</h3><div class="legend" style="margin:6px 0">'+lg+'</div><div class="chart" data-chart="'+id+'">'+o+'<div class="tip" hidden></div></div></div>';
+}
+app.addEventListener("pointermove",function(e){var c=e.target.closest("[data-chart]");if(!c)return;var d=charts[c.getAttribute("data-chart")];if(!d)return;
+  var svg=c.querySelector("svg"),r=svg.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*d.W,n=Math.max(d.T,2);
+  var t=Math.round((x-d.l)/(d.W-d.l-d.r)*(n-1))+1;t=Math.min(d.T,Math.max(1,t));
+  var cx=d.l+(t-1)/(n-1)*(d.W-d.l-d.r),cr=svg.querySelector(".cross");cr.setAttribute("x1",cx);cr.setAttribute("x2",cx);cr.setAttribute("visibility","visible");
+  var tip=c.querySelector(".tip"),h="<strong>Semaine "+t+"</strong>";
+  d.series.forEach(function(s){var v=s.v[t-1];if(v!=null)h+='<div><span><span class="dot" style="background:var('+s.c+')"></span> '+esc(s.n)+'</span><span>'+n0(v)+'</span></div>'});
+  tip.innerHTML=h;tip.hidden=false;var px=cx/d.W*r.width+c.scrollLeft;tip.style.left=(px>r.width*0.6?px-175:px+14)+"px";
+});
+app.addEventListener("pointerleave",function(e){var c=e.target.closest&&e.target.closest("[data-chart]");if(!c)return;c.querySelector(".tip").hidden=true;c.querySelector(".cross").setAttribute("visibility","hidden")},true);
+
+function chainCharts(sim){
+  var p=S.game.params,T=sim.T,wk=Math.min(sim.W,T),dem=[];for(var t=1;t<=wk;t++)dem.push(demandAt(p,t));
+  var ord=ROLES.map(function(R,i){return{n:R.n,c:R.c,v:sim.st[i].rows.map(function(r){return r.order})}});
+  ord.push({n:"Demande client",c:"--ink",dash:true,v:dem});
+  var net=ROLES.map(function(R,i){return{n:R.n,c:R.c,v:sim.st[i].rows.map(function(r){return r.inv-r.back})}});
+  return lineChart("Commandes passées par poste (caisses par semaine)",ord,T)+lineChart("Stock net par poste (stock moins commandes en retard, en caisses)",net,T);
+}
+
+/* ---------- vues ---------- */
+function crates(n){var o="",k=Math.min(n,32);for(var i=0;i<k;i++)o+="<i></i>";return k?'<span class="crates" aria-hidden="true">'+o+'</span>':""}
+var flashKey=null;
+function weekFlash(sim){var g=S.game;if(!sim||!g||g.status==="lobby"){flashKey=null;return}
+  var key=g.gameId+":"+(sim.finished?"fin":sim.W);if(flashKey!==null&&flashKey!==key&&flashKey.split(":")[0]===g.gameId){
+    var d=document.createElement("div");d.className="weekflash";d.textContent=sim.finished?"Partie terminée":"Semaine "+sim.W;document.body.appendChild(d);setTimeout(function(){d.remove()},1700)}
+  flashKey=key}
+function statusPill(sim){var g=S.game;if(!g)return "";
+  if(g.status==="lobby")return '<span class="pill amber">Salle d\'attente</span>';
+  if(sim.finished)return '<span class="pill">Partie terminée</span>';
+  var w="Semaine "+sim.W+((isHost()||g.params.showWeeks)?" / "+sim.T:"");
+  return '<span class="pill on">'+w+'</span>'+(g.status==="paused"?'<span class="pill amber">En pause</span>':"");
+}
+function seatGrid(hostView){var g=S.game,mine=myRole();
+  return '<div class="grid4">'+ROLES.map(function(R,i){var s=seat(R.k),uid=s&&s.uid,auto=g.auto&&g.auto[R.k],b="";
+    if(auto)b+='<span class="pill">Automatique</span>';
+    else if(!uid)b+='<button class="btn sm primary" data-act="claim" data-arg="'+R.k+'">Prendre ce poste</button>';
+    else if(uid===S.uid&&g.status==="lobby")b+='<button class="btn sm" data-act="release" data-arg="'+R.k+'">Libérer</button>';
+    if(hostView){if(uid&&uid!==S.uid)b+='<button class="btn sm" data-act="release" data-arg="'+R.k+'">Libérer</button>';
+      b+='<button class="btn sm" data-act="auto" data-arg="'+R.k+'">'+(auto?"Confier à un joueur":"Passer en automatique")+'</button>'}
+    return '<div class="seat'+(i===mine?" mine":"")+'" style="--c:var('+R.c+')"><div class="eyebrow">Maillon '+(i+1)+' sur 4</div><h3>'+R.n+'</h3><p class="small muted">'+R.d+'</p>'+
+      '<p class="who">'+(auto?"Joué par l\'ordinateur":esc(nameOf(uid)))+'</p><div class="row">'+b+'</div></div>'}).join("")+'</div>';
+}
+function soloRow(){return '<div class="info"><strong>Tester seul.</strong> Choisissez un poste : l\'ordinateur joue les trois autres et la partie démarre tout de suite, avec les paramètres affichés.<div class="row" style="margin-top:8px">'+
+  ROLES.map(function(R){return '<button class="btn sm" data-act="solo" data-arg="'+R.k+'"><span class="dot" style="background:var('+R.c+')"></span> '+R.n+'</button>'}).join("")+'</div></div>'}
+function viewLanding(){
+  return '<div class="panel"><div class="prose"><h2>Une chaîne logistique, quatre postes, une seule information : la commande</h2>'+
+    '<p>Détaillant, grossiste, distributeur et usine font circuler des caisses de bière pendant plusieurs semaines. Chaque joueur ouvre cette page sur son propre écran. Le formateur règle les paramètres, lance la partie et anime le débrief.</p>'+
+    '<div class="row"><button class="btn primary" data-act="create">Créer une session en tant que formateur</button></div>'+
+    '<p class="small muted">Les joueurs n\'ont rien à créer : dès que la session existe, ils choisissent leur poste ici. Envoyez-leur l\'adresse de cette page : elle contient le code de session.</p>'+soloRow()+'</div></div>'+viewRules();
+}
+function hostLine(){var g=S.game;if(isHost())return "";
+  return '<p class="small muted">Formateur : '+esc(nameOf(g.host))+'. '+(S.confirm==="takehost"?'Reprendre l\'animation à sa place ? <button class="btn sm" data-act="takehost">Confirmer</button> <button class="btn sm" data-act="cancel">Annuler</button>':'<button class="btn sm" data-confirm="takehost">Reprendre l\'animation</button>')+'</p>';
+}
+function viewPoste(sim){var g=S.game,i=myRole();
+  if(g.status==="lobby")return '<div class="panel"><h2>Choisissez votre poste</h2><p class="muted">Un joueur par poste. Le formateur lance la partie quand tout le monde est installé.</p>'+seatGrid(false)+hostLine()+'</div>';
+  if(i<0)return '<div class="panel"><h2>La partie est en cours</h2><p class="muted">Vous n\'occupez aucun poste. Prenez un poste libre, ou suivez la partie avec le formateur.</p>'+seatGrid(false)+hostLine()+'</div>';
+  var R=ROLES[i],p=g.params,s=sim.st[i],wk=Math.min(sim.W,sim.T),row=s.rows[wk-1],up=i<3?ROLES[i+1].n:"Production",down=i>0?ROLES[i-1].n:"Consommateurs";
+  var o='<div class="panel" style="border-top:3px solid var('+R.c+')"><div class="top"><div><div class="eyebrow">Votre poste</div><h2>'+R.n+'</h2></div><div class="pills">'+statusPill(sim)+'<span class="pill num">Coût cumulé '+eur(s.cum)+'</span></div></div>';
+  var inc=sim.incoming[i].slice().reverse(),nodes='<div class="node"><span class="eyebrow">Fournisseur</span><span>'+up+'</span></div><span class="arrow">→</span>';
+  inc.forEach(function(v,k){nodes+='<div class="node"><span class="eyebrow">Arrive dans '+(inc.length-k)+' sem.</span><b>'+n0(v)+'</b></div><span class="arrow">→</span>'});
+  nodes+='<div class="node stock"><span class="eyebrow">Stock</span><b>'+n0(row.inv)+'</b>'+crates(row.inv)+'<span class="small muted">reçu cette semaine : '+n0(row.arr)+'</span></div><span class="arrow">→</span>'+
+    '<div class="node'+(row.back>0?" late":"")+'"><span class="eyebrow">Client : '+down+'</span><b>'+n0(row.back)+'</b><span class="small muted">caisses en retard</span><span class="small muted">commandé : '+n0(row.inc)+' · livré : '+n0(row.ship)+'</span></div>';
+  var mid='<div class="chain">'+nodes+'</div>';
+  mid+='<div class="lights">'+ROLES.map(function(Q,j){var ok=sim.finished||(g.auto&&g.auto[Q.k])||sim.st[j].rows[wk-1].order!=null;return '<span class="light'+(ok?" ok":"")+'"><span class="dot"></span>'+Q.n+' : '+(ok?"prêt":"réfléchit")+'</span>'}).join("")+'</div>';
+  if(sim.finished)o+='<div class="info">La partie est terminée. Votre coût total : <strong>'+eur(s.cum)+'</strong>. Rendez-vous dans l\'onglet Débrief.</div>';
+  else if(row.order!=null){var wait=ROLES.filter(function(Q,j){return !(g.auto&&g.auto[Q.k])&&sim.st[j].rows[wk-1].order==null}).map(function(Q){return Q.n});
+    o+='<div class="info">Commande de la semaine '+wk+' envoyée : <strong>'+n0(row.order)+' caisses</strong>. En attente de : '+esc(wait.join(", ")||"la semaine suivante")+'.</div>'}
+  else if(g.status==="paused")o+='<div class="note">Le formateur a mis la partie en pause.</div>';
+  else o+='<div class="order"><label class="f" for="order-qty">Semaine '+wk+' : combien de caisses commandez-vous à '+(i<3?"votre fournisseur":"la production")+' ?<span class="small muted">Tapez la quantité de votre choix, de 0 à 999.</span><input id="order-qty" type="text" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0" value="'+esc(S.draft)+'"></label><div class="row"><button class="btn sm" data-act="bump" data-arg="-5">−5</button><button class="btn sm" data-act="bump" data-arg="-1">−1</button><button class="btn sm" data-act="bump" data-arg="1">+1</button><button class="btn sm" data-act="bump" data-arg="5">+5</button></div><button class="btn primary" data-act="order">Envoyer la commande</button>'+
+    '<span class="small muted">Stock : '+eur(p.hold)+' par caisse et par semaine. Retard : '+eur(p.back)+'.</span></div>';
+  o+=mid;
+  if(p.visibility!=="classic"){var d=[];for(var t=Math.max(1,wk-5);t<=wk;t++)d.push("S"+t+" : "+demandAt(p,t));
+    o+='<div class="info"><strong>Demande des consommateurs</strong> (information partagée) — '+d.join(" · ")+'</div>'}
+  if(p.visibility==="full")o+='<div class="tw"><table><thead><tr><th>Chaîne complète</th><th>Stock</th><th>Retard</th><th>Dernière commande</th></tr></thead><tbody>'+ROLES.map(function(Q,j){var rr=sim.st[j].rows,c=rr[wk-1],pv=wk>1?rr[wk-2].order:null;
+    return '<tr><td><span class="dot" style="background:var('+Q.c+')"></span> '+Q.n+'</td><td>'+n0(c.inv)+'</td><td>'+n0(c.back)+'</td><td>'+(pv==null?"–":n0(pv))+'</td></tr>'}).join("")+'</tbody></table></div>';
+  o+='</div>';
+  var rows=s.rows.slice().reverse().map(function(r){return '<tr><td>S'+r.t+'</td><td>'+n0(r.arr)+'</td><td>'+n0(r.inc)+'</td><td>'+n0(r.ship)+'</td><td>'+n0(r.inv)+'</td><td>'+n0(r.back)+'</td><td>'+(r.order==null?"–":n0(r.order))+'</td><td>'+eur(r.cost)+'</td></tr>'}).join("");
+  o+='<div class="panel">'+lineChart("Votre poste, semaine après semaine (caisses)",[{n:"Stock net",c:R.c,v:s.rows.map(function(r){return r.inv-r.back})},{n:"Vos commandes",c:"--ink",dash:true,v:s.rows.map(function(r){return r.order})}],(isHost()||p.showWeeks||sim.finished)?sim.T:Math.max(wk,10))+
+    '<details><summary>Historique détaillé</summary><div class="tw" style="margin-top:10px"><table><thead><tr><th>Semaine</th><th>Reçu</th><th>Commande client</th><th>Livré</th><th>Stock</th><th>Retard</th><th>Commandé</th><th>Coût</th></tr></thead><tbody>'+rows+'</tbody></table></div></details></div>';
+  return o;
+}
+function fld(k,label,type,extra){var v=S.cfg[k];return '<label class="f" for="cfg-'+k+'">'+label+'<input id="cfg-'+k+'" data-cfg="'+k+'" type="'+(type||"number")+'" value="'+esc(v)+'" '+(extra||"")+'></label>'}
+function sel(k,label,opts){return '<label class="f" for="cfg-'+k+'">'+label+'<select id="cfg-'+k+'" data-cfg="'+k+'">'+opts.map(function(o){return '<option value="'+o[0]+'"'+(S.cfg[k]===o[0]?" selected":"")+'>'+o[1]+'</option>'}).join("")+'</select></label>'}
+function newGameBar(){
+  if(S.confirm==="rematch")return '<div class="note">Lancer une nouvelle manche avec les mêmes joueurs ? Les données de la manche en cours seront effacées. <button class="btn sm" data-act="rematch">Confirmer</button> <button class="btn sm" data-act="cancel">Annuler</button></div>';
+  if(S.confirm==="fresh")return '<div class="note">Repartir de zéro et libérer tous les postes ? <button class="btn sm" data-act="fresh">Confirmer</button> <button class="btn sm" data-act="cancel">Annuler</button></div>';
+  return '<div class="row"><button class="btn" data-confirm="rematch">Nouvelle manche, mêmes postes</button><button class="btn" data-confirm="fresh">Nouvelle session, postes libérés</button></div>';
+}
+function viewAnim(sim){var g=S.game,p=g.params,o="";
+  if(g.status==="lobby"){var c=S.cfg,dem="";
+    if(c.demandType==="custom")dem='<label class="f" for="cfg-custom" style="grid-column:1/-1">Demande semaine par semaine, séparée par des virgules (la dernière valeur se prolonge)<input id="cfg-custom" data-cfg="custom" type="text" value="'+esc(c.custom)+'" placeholder="4, 4, 4, 4, 8, 8, 8"></label>';
+    else dem=fld("dBase","Demande de départ (caisses)",null,'min="0" max="50"')+fld("dNew",c.demandType==="spike"?"Demande pendant le pic":"Demande après le palier",null,'min="0" max="100"')+fld("dWeek","Semaine du changement",null,'min="1" max="60"')+(c.demandType==="spike"?fld("dLen","Durée du pic (semaines)",null,'min="1" max="30"'):"");
+    var empty=ROLES.filter(function(R){var s=seat(R.k);return !(g.auto&&g.auto[R.k])&&!(s&&s.uid)}).map(function(R){return R.n});
+    o+='<div class="panel"><h2>1. Les postes</h2><p class="muted">Les joueurs choisissent leur poste depuis leur écran. Passez en automatique les postes sans joueur.</p>'+seatGrid(true)+'</div>'+
+      '<div class="panel"><h2>2. Les paramètres</h2><div class="row"><span class="small muted">Préréglages :</span><button class="btn sm" data-act="preset" data-arg="classic">Classique MIT</button><button class="btn sm" data-act="preset" data-arg="short">Délais courts</button><button class="btn sm" data-act="preset" data-arg="open">Chaîne transparente</button></div>'+
+      '<div class="form">'+fld("weeks","Durée (semaines)",null,'min="5" max="60"')+fld("orderDelay","Délai de transmission des commandes",null,'min="1" max="4"')+fld("shipDelay","Délai de livraison",null,'min="1" max="4"')+fld("prodDelay","Délai de production (usine)",null,'min="1" max="4"')+
+      fld("initInv","Stock de départ (caisses)",null,'min="0" max="100"')+fld("hold","Coût de stock (€ par caisse)",null,'min="0" max="10" step="0.1"')+fld("back","Coût de retard (€ par caisse)",null,'min="0" max="10" step="0.1"')+
+      sel("visibility","Information visible par les joueurs",[["classic","Classique : son poste uniquement"],["demand","Demande des consommateurs partagée"],["full","Chaîne entièrement visible"]])+
+      sel("demandType","Profil de la demande",[["step","Palier durable"],["spike","Pic temporaire"],["custom","Personnalisée"]])+dem+'</div>'+
+      '<label class="row small" for="cfg-showWeeks"><input id="cfg-showWeeks" data-cfg="showWeeks" type="checkbox"'+(c.showWeeks?" checked":"")+'> Annoncer la durée de la partie aux joueurs (déconseillé : ils vident leurs stocks en fin de partie)</label></div>'+
+      '<div class="panel"><h2>3. Lancer</h2>'+(empty.length?'<div class="note">Postes sans joueur : '+esc(empty.join(", "))+'. La partie n\'avancera pas tant qu\'ils ne commandent pas.</div>':"")+
+      '<div class="row"><button class="btn primary" data-act="launch">Lancer la partie</button></div>'+soloRow()+'</div>';
+    return o;
+  }
+  var wk=Math.min(sim.W,sim.T);
+  o+='<div class="panel"><div class="top"><h2>'+(sim.finished?"Partie terminée":"Semaine "+sim.W+" sur "+sim.T)+'</h2><div class="row">';
+  if(!sim.finished){o+=g.status==="paused"?'<button class="btn primary" data-act="resume">Reprendre</button>':'<button class="btn" data-act="pause">Mettre en pause</button>';
+    o+=S.confirm==="end"?'<span class="small">Terminer maintenant ?</span><button class="btn sm danger" data-act="end">Confirmer</button><button class="btn sm" data-act="cancel">Annuler</button>':'<button class="btn danger" data-confirm="end">Terminer la partie</button>'}
+  o+='</div></div><p class="muted small">Demande des consommateurs cette semaine : <strong>'+n0(demandAt(p,wk))+' caisses</strong>. Délais : commande '+p.orderDelay+' sem., livraison '+p.shipDelay+' sem., production '+p.prodDelay+' sem.</p>'+
+    '<div class="tw"><table><thead><tr><th>Poste</th><th class="l">Joueur</th><th>Commande S'+wk+'</th><th>Stock</th><th>Retard</th><th>Coût cumulé</th><th></th></tr></thead><tbody>'+
+    ROLES.map(function(R,i){var s=seat(R.k),r=sim.st[i].rows[wk-1],auto=g.auto&&g.auto[R.k],b="";
+      if(!sim.finished){if(!auto&&r.order==null)b+='<button class="btn sm" data-act="force" data-arg="'+R.k+'">Commander à sa place ('+r.sugg+')</button> ';
+        b+='<button class="btn sm" data-act="auto" data-arg="'+R.k+'">'+(auto?"Rendre au joueur":"Automatique")+'</button>'}
+      return '<tr><td><span class="dot" style="background:var('+R.c+')"></span> '+R.n+'</td><td class="l">'+(auto?"Ordinateur":esc(nameOf(s&&s.uid)))+'</td><td>'+(r.order==null?'<span class="pill amber">en attente</span>':n0(r.order))+'</td><td>'+n0(r.inv)+'</td><td>'+n0(r.back)+'</td><td>'+eur(r.cum)+'</td><td>'+b+'</td></tr>'}).join("")+
+    '</tbody></table></div>'+(sim.finished?'<div class="info">Ouvrez l\'onglet Débrief : il est maintenant visible par tous les joueurs.</div>'+newGameBar():"")+'</div>';
+  o+='<div class="panel">'+chainCharts(sim)+'<p class="small muted">Ces courbes ne sont visibles que par vous tant que la partie n\'est pas terminée.</p></div>';
+  if(!sim.finished)o+='<div class="panel"><h3>Recommencer</h3>'+newGameBar()+'</div>';
+  return o;
+}
+function viewDebrief(sim){var g=S.game,p=g.params;
+  if(g.status==="lobby")return '<div class="panel"><p class="muted">Le débrief apparaîtra ici une fois la partie lancée.</p></div>';
+  var wk=Math.min(sim.W,sim.T),dem=[];for(var t=1;t<=wk;t++)dem.push(demandAt(p,t));var vd=variance(dem),tot=0;
+  var st=ROLES.map(function(R,i){var rows=sim.st[i].rows,ord=rows.map(function(r){return r.order}).filter(function(x){return x!=null});tot+=sim.st[i].cum;
+    return{R:R,cost:sim.st[i].cum,amp:vd>0&&ord.length>1?variance(ord)/vd:null,peak:ord.length?Math.max.apply(null,ord):0,back:Math.max.apply(null,rows.map(function(r){return r.back})),inv:Math.max.apply(null,rows.map(function(r){return r.inv}))}});
+  var o='<div class="panel"><div class="top"><h2>Débrief'+(sim.finished?"":" (partie en cours, vue formateur)")+'</h2><span class="pill num">'+wk+' semaines jouées</span></div>'+
+    '<div class="tiles"><div class="tile"><span class="eyebrow">Coût total de la chaîne</span><b class="num">'+eur(tot)+'</b></div>'+st.map(function(x){return '<div class="tile" style="border-top:3px solid var('+x.R.c+')"><span class="eyebrow">'+x.R.n+' · rang '+(st.filter(function(y){return y.cost<x.cost}).length+1)+'</span><b class="num">'+eur(x.cost)+'</b></div>'}).join("")+'</div>'+
+    '<p class="muted small">La demande des consommateurs a varié entre '+n0(Math.min.apply(null,dem))+' et '+n0(Math.max.apply(null,dem))+' caisses par semaine. Comparez avec les pics de commande ci-dessous.</p>'+
+    '<div class="tw"><table><thead><tr><th>Poste</th><th>Amplification des commandes</th><th>Commande maximale</th><th>Retard maximal</th><th>Stock maximal</th><th>Coût</th></tr></thead><tbody>'+
+    st.map(function(x){return '<tr><td><span class="dot" style="background:var('+x.R.c+')"></span> '+x.R.n+'</td><td>'+(x.amp==null?"–":"× "+x.amp.toLocaleString("fr-FR",{maximumFractionDigits:1}))+'</td><td>'+n0(x.peak)+'</td><td>'+n0(x.back)+'</td><td>'+n0(x.inv)+'</td><td>'+eur(x.cost)+'</td></tr>'}).join("")+
+    '</tbody></table></div><p class="small muted">Amplification : variance des commandes du poste divisée par la variance de la demande des consommateurs. Au-dessus de 1, le poste amplifie les variations.</p></div>';
+  o+='<div class="panel">'+chainCharts(sim)+'</div>';
+  o+='<div class="panel"><div class="prose"><h2>Questions pour le groupe</h2><ol><li>Qu\'avez-vous ressenti pendant la partie ? À quel moment avez-vous perdu le contrôle ?</li><li>Selon vous, comment la demande des consommateurs a-t-elle évolué ? (Faites répondre les trois postes amont avant de montrer la courbe.)</li><li>Qui est responsable des ruptures et des surstocks ? Un joueur, ou la structure du jeu ?</li><li>Qu\'avez-vous oublié en passant vos commandes ? (Les caisses déjà commandées mais pas encore livrées.)</li><li>Si vous rejouiez, que changeriez-vous sans modifier les règles ? Et en modifiant les règles ?</li><li>Où retrouvez-vous cette dynamique chez vos clients ?</li></ol></div></div>';
+  var head='<tr><th>Semaine</th><th>Demande</th>'+ROLES.map(function(R){return '<th>'+R.n+' : commande</th><th>stock net</th>'}).join("")+'</tr>',body="";
+  for(var w=1;w<=wk;w++)body+='<tr><td>S'+w+'</td><td>'+dem[w-1]+'</td>'+ROLES.map(function(R,i){var r=sim.st[i].rows[w-1];return '<td>'+(r.order==null?"–":r.order)+'</td><td>'+(r.inv-r.back)+'</td>'}).join("")+'</tr>';
+  o+='<div class="panel"><details><summary>Données complètes, semaine par semaine</summary><div class="tw" style="margin-top:10px"><table><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div></details></div>';
+  return o;
+}
+function viewRules(){var p=(S.game&&S.game.params)||DEF;
+  return '<div class="panel"><div class="prose"><h2>Règles du jeu</h2>'+
+  '<p>Vous tenez un maillon d\'une chaîne qui distribue de la bière : usine → distributeur → grossiste → détaillant → consommateurs. Votre objectif est de <strong>minimiser le coût total</strong> de votre poste sur toute la partie.</p>'+
+  '<h3>Chaque semaine</h3><ol><li>Vous recevez les caisses expédiées par votre fournisseur quelques semaines plus tôt.</li><li>Vous recevez la commande de votre client.</li><li>Vous livrez automatiquement tout ce que votre stock permet, en commençant par les commandes en retard.</li><li>Vous décidez d\'une seule chose : la quantité à commander à votre fournisseur.</li></ol>'+
+  '<h3>Délais</h3><ul><li>Votre commande met '+p.orderDelay+' semaine(s) à parvenir à votre fournisseur.</li><li>Une livraison met '+p.shipDelay+' semaine(s) à vous parvenir, si le fournisseur a le stock.</li><li>À l\'usine, la production demande '+p.prodDelay+' semaine(s).</li></ul>'+
+  '<h3>Coûts</h3><ul><li>'+eur(p.hold)+' par caisse en stock, chaque semaine.</li><li>'+eur(p.back)+' par caisse commandée et non livrée, chaque semaine. Une commande en retard reste due.</li></ul>'+
+  '<h3>Une seule contrainte</h3><p>On ne se parle pas entre postes. La seule information qui circule est la commande que vous passez.</p></div></div>';
+}
+function viewGuide(){
+  return '<div class="panel"><div class="prose"><h2>Guide du formateur</h2><p>Ce guide n\'est visible que par le formateur. Durée conseillée : 1 h 45 pour une manche et son débrief, 2 h 30 avec une seconde manche.</p>'+
+  '<h3>Objectifs pédagogiques</h3><ul><li>Faire vivre l\'effet coup de fouet : une petite variation de la demande finale devient une oscillation violente en amont.</li><li>Montrer que le comportement vient de la structure (délais, information locale) et non des personnes.</li><li>Donner aux consultants un vocabulaire et une expérience commune pour parler de pilotage de flux, de S&amp;OP et de partage d\'information avec leurs clients.</li></ul>'+
+  '<h3>Préparation</h3><ul><li>Envoyez aux participants l\'adresse de la page une fois la session créée : elle contient le code de session. Chacun saisit son prénom en arrivant.</li><li>4 joueurs, un par poste. Avec 8 participants, jouez en binômes sur un même écran. Avec moins de 4, passez les postes vides en automatique.</li><li>Gardez le préréglage « Classique MIT » pour la première manche et n\'annoncez pas la durée.</li><li>Séparez physiquement les postes si possible. En visio, interdisez la messagerie.</li></ul>'+
+  '<h3>Déroulé</h3><div class="steps"><span>0:00 – 0:10</span><span>Accueil. Présentez la chaîne et l\'objectif de coût. Ne prononcez pas les mots « coup de fouet ».</span><span>0:10 – 0:20</span><span>Lecture des règles (onglet Règles), choix des postes, questions.</span><span>0:20 – 1:00</span><span>Partie. Comptez environ 1 minute par semaine, plus vite après la semaine 10. Ne commentez rien.</span><span>1:00 – 1:10</span><span>Pause. Chaque joueur note sur papier sa perception de la demande finale.</span><span>1:10 – 1:45</span><span>Débrief avec l\'onglet Débrief projeté.</span><span>en option</span><span>Seconde manche de 20 semaines en « Chaîne transparente » ou « Délais courts », puis comparaison des coûts.</span></div>'+
+  '<h3>Pendant la partie</h3><ul><li>Suivez l\'onglet Animation. Si un joueur bloque la semaine, relancez-le, puis utilisez « Commander à sa place ».</li><li>Notez les réactions à voix haute (« ils font n\'importe quoi au-dessus »). Elles nourrissent le débrief.</li><li>Attendez-vous à des ruptures vers les semaines 8 à 15, puis à des surstocks massifs.</li></ul>'+
+  '<h3>Conduite du débrief</h3><ol><li><strong>Le vécu.</strong> Faites parler chaque poste, du détaillant à l\'usine. Laissez s\'exprimer les reproches.</li><li><strong>La révélation.</strong> Demandez à l\'amont de dessiner la demande finale, puis montrez la courbe : un seul changement, dès le début.</li><li><strong>Les causes.</strong> Délais, commandes en cours oubliées, sur-réaction aux ruptures, absence de visibilité sur la demande réelle.</li><li><strong>Les remèdes.</strong> Partage de la demande finale, réduction des délais, commandes plus petites et plus fréquentes, pilotage par le stock et les encours, coordination entre maillons.</li><li><strong>Le transfert.</strong> Chaque consultant cite une situation client où il a vu cette dynamique, et ce qu\'il y ferait différemment.</li></ol>'+
+  '<h3>Messages clés</h3><ul><li>La structure d\'un système produit son comportement. Changer les personnes sans changer la structure reproduit le résultat.</li><li>Une décision localement rationnelle peut dégrader l\'ensemble de la chaîne.</li><li>L\'information coûte moins cher que le stock.</li></ul>'+
+  '<h3>Paramètres : que change quoi</h3><ul><li><strong>Délais.</strong> Plus ils sont longs, plus l\'oscillation est forte. Passer à 1 semaine la réduit nettement.</li><li><strong>Visibilité.</strong> Partager la demande finale calme l\'amont sans rien changer à la physique des flux.</li><li><strong>Coût de retard.</strong> L\'augmenter pousse au surstock et amplifie les commandes de panique.</li><li><strong>Profil de demande.</strong> Le palier suffit à déclencher l\'effet. Le pic montre qu\'un événement passager laisse des traces pendant des semaines.</li></ul></div></div>';
+}
+
+function render(){
+  var ae=document.activeElement,fid=ae&&ae.id,ss=null;try{if(fid&&ae.type==="text")ss=[ae.selectionStart,ae.selectionEnd]}catch(e){}
+  charts={};chartN=0;var g=S.game,o="";
+  o+='<div class="top"><div class="brand"><h1>Beer Game</h1><span>Brassez, livrez, survivez au coup de fouet</span></div><div class="pills">';
+  if(CODE&&!S.gate&&!S.local)o+='<span class="pill">Session '+CODE+'</span>';var sim=null;
+  if(S.ready&&g){sim=simulate(g,S.seats);o+=statusPill(sim);var mr=myRole();
+    if(isHost())o+='<span class="pill on">Vous animez</span>';
+    if(mr>=0)o+='<span class="pill"><span class="dot" style="background:var('+ROLES[mr].c+')"></span>'+ROLES[mr].n+'</span>'}
+  o+='</div></div>';
+  if(S.local)o+='<div class="note">Mode démonstration : Firebase n\'est pas encore configuré (fichier config.js), rien n\'est enregistré ni partagé. Vous pouvez tout de même essayer une partie contre l\'ordinateur.</div>';
+  if(S.dead)o+='<div class="note">La connexion à la session partagée a été interrompue. Rouvrez la page pour reprendre.</div>';
+  if(!S.ready){o+='<div class="panel"><p class="muted">'+(S.slow?"La session partagée ne répond pas encore. La page se mettra à jour dès qu\'elle sera joignable.":"Connexion à la session partagée…")+'</p></div>'}
+  else if(S.gate){o+=viewGate()}else if(!g){o+=viewLanding()}
+  else{
+    var tabs=[["poste","Mon poste"]];if(isHost())tabs.push(["anim","Animation"]);if(isHost()||sim.finished)tabs.push(["debrief","Débrief"]);tabs.push(["regles","Règles"]);if(isHost())tabs.push(["guide","Guide du formateur"]);
+    if(!tabs.some(function(t){return t[0]===S.tab}))S.tab=isHost()?"anim":"poste";
+    o+='<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab" role="tab" aria-selected="'+(S.tab===t[0])+'" data-tab="'+t[0]+'">'+t[1]+'</button>'}).join("")+'</div><div class="stack">';
+    o+=S.tab==="anim"?viewAnim(sim):S.tab==="debrief"?viewDebrief(sim):S.tab==="regles"?viewRules():S.tab==="guide"?viewGuide():viewPoste(sim);
+    o+='</div>';
+  }
+  if(S.toast)o+='<div class="toast" role="status">'+esc(S.toast)+'</div>';
+  app.innerHTML=o;
+  window.BGSTATE={role:(S.ready&&g)?myRole():-1,run:!!(g&&g.status==="running")};weekFlash(sim);
+  if(fid){var el=document.getElementById(fid);if(el){el.focus();if(ss){try{el.setSelectionRange(ss[0],ss[1])}catch(e){}}}}
+}
+render();boot();
+})();
+</script>
+
+<script>
+"use strict";
+(function(){
+var c=document.getElementById("bg");if(!c||!c.getContext)return;
+var x=c.getContext("2d"),W=0,H=0,bub=[],T=0,dist=0,last=0;
+var red=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var NAMES=["USINE","DISTRIBUTEUR","GROSSISTE","DÉTAILLANT"],COL=["#c98500","#199e70","#d95926","#3987e5"];
+var BODY="#4a3116",EDGE="#8a6630",AMB="245,166,35";
+function size(){var D=Math.min(window.devicePixelRatio||1,2);W=window.innerWidth;H=window.innerHeight;c.width=Math.round(W*D);c.height=Math.round(H*D);x.setTransform(D,0,0,D,0,0);
+  bub=[];var n=Math.round(Math.min(70,W*H/16000));for(var i=0;i<n;i++)bub.push({x:Math.random()*W,y:Math.random()*H,r:1.5+Math.random()*5,v:12+Math.random()*30,p:Math.random()*6.28})}
+function box(px,py,w,h,f,s){x.fillStyle=f;x.fillRect(px,py,w,h);if(s){x.strokeStyle=s;x.lineWidth=1;x.strokeRect(px+.5,py+.5,w-1,h-1)}}
+function win(px,py,w,h,i){x.fillStyle="rgba("+AMB+","+(0.55+0.25*Math.sin(T*2+i+px)).toFixed(2)+")";x.fillRect(px,py,w,h)}
+function station(i,cx,b,s,hi){
+  x.save();
+  if(hi){x.shadowColor=COL[i];x.shadowBlur=26}
+  if(i===0){ /* brasserie : cuves en cuivre, toit en dents de scie, cheminée qui mousse */
+    box(cx-46*s,b-48*s,92*s,48*s,BODY,EDGE);
+    x.fillStyle=BODY;x.beginPath();for(var k=0;k<3;k++){var rx=cx-46*s+k*30.6*s;x.moveTo(rx,b-48*s);x.lineTo(rx,b-66*s);x.lineTo(rx+30.6*s,b-48*s)}x.fill();
+    box(cx+26*s,b-92*s,11*s,44*s,BODY,EDGE);
+    x.shadowBlur=0;
+    for(var q=0;q<2;q++){var tx=cx-38*s+q*24*s;x.fillStyle="#b5651d";x.beginPath();x.moveTo(tx,b);x.lineTo(tx,b-34*s);x.arc(tx+9*s,b-34*s,9*s,Math.PI,0);x.lineTo(tx+18*s,b);x.fill();box(tx,b-20*s,18*s,2*s,"#7a3f0e")}
+    win(cx+8*s,b-34*s,10*s,10*s,i);
+    for(var p=0;p<3;p++){var u=(T*14+p*12)%36;x.fillStyle="rgba(255,243,220,"+(0.5*(1-u/36)).toFixed(2)+")";x.beginPath();x.arc(cx+31.5*s+Math.sin(T+p)*3*s,b-94*s-u*s,(4+u/6)*s,0,6.29);x.fill()}
+  }else if(i===1){ /* entrepôt du distributeur : toit en arche, grande porte */
+    box(cx-52*s,b-36*s,104*s,36*s,BODY,EDGE);
+    x.fillStyle=BODY;x.beginPath();x.ellipse(cx,b-36*s,52*s,20*s,0,Math.PI,0);x.fill();
+    x.shadowBlur=0;
+    box(cx-16*s,b-28*s,32*s,28*s,"#1a1107",EDGE);for(var l=1;l<5;l++)box(cx-16*s,b-28*s+l*5.6*s,32*s,1,EDGE);
+    win(cx-42*s,b-28*s,12*s,8*s,i);win(cx+30*s,b-28*s,12*s,8*s,i);
+  }else if(i===2){ /* grossiste : hangar et piles de caisses */
+    box(cx-38*s,b-34*s,56*s,34*s,BODY,EDGE);
+    x.fillStyle=BODY;x.beginPath();x.moveTo(cx-42*s,b-34*s);x.lineTo(cx-10*s,b-54*s);x.lineTo(cx+22*s,b-34*s);x.fill();
+    x.shadowBlur=0;
+    win(cx-28*s,b-26*s,10*s,10*s,i);box(cx-8*s,b-22*s,16*s,22*s,"#1a1107",EDGE);
+    [[24,0],[37,0],[30,13]].forEach(function(o){box(cx+o[0]*s,b-(o[1]+12)*s,12*s,12*s,"#d98f12","#7a4a05")});
+  }else{ /* détaillant : le bar, son store rayé et sa chope en enseigne */
+    box(cx-34*s,b-46*s,68*s,46*s,BODY,EDGE);
+    x.shadowBlur=0;
+    for(var a=0;a<6;a++)box(cx-38*s+a*12.7*s,b-34*s,12.7*s,8*s,a%2?"#fff3dc":"#f5a623");
+    win(cx-26*s,b-22*s,20*s,14*s,i);box(cx+6*s,b-22*s,16*s,22*s,"#1a1107",EDGE);
+    box(cx+38*s,b-70*s,2*s,26*s,EDGE);
+    box(cx+42*s,b-70*s,12*s,15*s,"#f5a623","#7a4a05");box(cx+41*s,b-74*s,14*s,5*s,"#fff3dc");
+    x.strokeStyle="#f5a623";x.lineWidth=2*s;x.beginPath();x.arc(cx+55*s,b-62*s,4*s,-1.57,1.57);x.stroke();
+  }
+  x.restore();
+  x.font=(hi?"700 ":"600 ")+Math.round(11*s)+"px 'Chakra Petch',system-ui,sans-serif";x.textAlign="center";
+  x.fillStyle=hi?COL[i]:"rgba(226,207,168,.55)";x.fillText(NAMES[i]+(hi?" · VOUS":""),cx,b-104*s);
+}
+function truck(tx,b,s){
+  box(tx,b-8*s,30*s,17*s,"#f5a623","#7a4a05");box(tx+10*s,b-8*s,1,17*s,"#7a4a05");box(tx+20*s,b-8*s,1,17*s,"#7a4a05");
+  box(tx+31*s,b-3*s,13*s,12*s,"#e2cfa8","#5a3f1c");box(tx+36*s,b-1*s,6*s,5*s,"#3987e5");
+  x.fillStyle="rgba(255,243,220,.5)";x.beginPath();x.moveTo(tx+44*s,b+5*s);x.lineTo(tx+62*s,b+1*s);x.lineTo(tx+62*s,b+10*s);x.fill();
+  [7,24,37].forEach(function(o){x.fillStyle="#050302";x.beginPath();x.arc(tx+o*s,b+10*s,4*s,0,6.29);x.fill();x.fillStyle="#8a7650";x.beginPath();x.arc(tx+o*s,b+10*s,1.5*s,0,6.29);x.fill()});
+}
+function draw(){
+  var st=window.BGSTATE||{role:-1,run:false};
+  var g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,"#0c0704");g.addColorStop(.6,"#1b1006");g.addColorStop(1,"#3a2206");x.fillStyle=g;x.fillRect(0,0,W,H);
+  bub.forEach(function(b){var yy=((b.y-T*b.v)%H+H)%H,xx=b.x+Math.sin(T*.8+b.p)*6;x.strokeStyle="rgba("+AMB+",.22)";x.lineWidth=1;x.beginPath();x.arc(xx,yy,b.r,0,6.29);x.stroke();
+    x.fillStyle="rgba(255,243,220,.18)";x.beginPath();x.arc(xx-b.r*.3,yy-b.r*.3,b.r*.25,0,6.29);x.fill()});
+  var s=Math.max(.5,Math.min(1.15,W/1000)),base=H-34*s;
+  /* flux d'information : les bons de commande remontent vers l'usine */
+  var iy=base-128*s;x.strokeStyle="rgba(255,243,220,.14)";x.lineWidth=1;x.setLineDash([4,8]);x.lineDashOffset=dist*20;x.beginPath();x.moveTo(0,iy);x.lineTo(W,iy);x.stroke();x.setLineDash([]);
+  for(var k=0;k<3;k++){var px=W+20-((dist*55+k*(W+40)/3)%(W+40));box(px,iy-7*s,10*s,13*s,"rgba(255,243,220,.6)");box(px+2*s,iy-4*s,6*s,1,"#5a3f1c");box(px+2*s,iy-1*s,6*s,1,"#5a3f1c");box(px+2*s,iy+2*s,4*s,1,"#5a3f1c")}
+  for(var i=0;i<4;i++)station(i,W*(0.12+0.253*i),base,s,st.role>=0&&3-st.role===i);
+  /* flux physique : la route et les camions de caisses descendent vers le bar */
+  box(0,base,W,34*s,"#0a0603");box(0,base,W,1,"#5a3f1c");
+  for(var d=0;d<W;d+=44)box(d,base+20*s,20,2,"rgba("+AMB+",.3)");
+  for(var t=0;t<4;t++)truck(((dist*60+t*(W+140)/4)%(W+140))-70,base,s);
+}
+function frame(now){var dt=Math.min(.05,(now-last)/1000||0);last=now;T+=dt;dist+=dt*((window.BGSTATE&&window.BGSTATE.run)?1.6:1);draw();requestAnimationFrame(frame)}
+size();window.addEventListener("resize",function(){size();draw()});
+if(red){draw();setInterval(draw,1500)}else requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
